@@ -1,0 +1,382 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://step.local/schemas/audit-result.schema.json",
+  "title": "STEP Industrial Proposal Audit Result",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "audit_run_id",
+    "opportunity_id",
+    "status",
+    "summary",
+    "requirements",
+    "commitments",
+    "findings",
+    "blocking_risks",
+    "recommendations"
+  ],
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "const": "1.0.0"
+    },
+    "audit_run_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "opportunity_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "status": {
+      "type": "string",
+      "enum": ["completed", "needs_input", "failed"]
+    },
+    "summary": {
+      "$ref": "#/$defs/summary"
+    },
+    "requirements": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/requirement"
+      }
+    },
+    "commitments": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/commitment"
+      }
+    },
+    "findings": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/finding"
+      }
+    },
+    "blocking_risks": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/blockingRisk"
+      }
+    },
+    "recommendations": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/recommendation"
+      }
+    },
+    "warnings": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "default": []
+    },
+    "provenance": {
+      "$ref": "#/$defs/provenance"
+    }
+  },
+  "$defs": {
+    "summary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "recommendation",
+        "risk_level",
+        "executive_opinion",
+        "requirements_total",
+        "requirements_covered",
+        "requirements_partial",
+        "requirements_not_covered",
+        "requirements_not_verifiable"
+      ],
+      "properties": {
+        "recommendation": {
+          "type": "string",
+          "enum": ["submit", "submit_with_corrections", "do_not_submit", "needs_input"]
+        },
+        "risk_level": {
+          "type": "string",
+          "enum": ["critical", "high", "medium", "low"]
+        },
+        "executive_opinion": {
+          "type": "string",
+          "minLength": 1
+        },
+        "requirements_total": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "requirements_covered": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "requirements_partial": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "requirements_not_covered": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "requirements_not_verifiable": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    },
+    "evidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["document_id", "revision_id", "locator", "excerpt", "content_hash"],
+      "properties": {
+        "document_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "revision_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "locator": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "page": {
+              "type": ["integer", "null"],
+              "minimum": 1
+            },
+            "section": {
+              "type": ["string", "null"]
+            },
+            "sheet": {
+              "type": ["string", "null"]
+            },
+            "cell_range": {
+              "type": ["string", "null"]
+            }
+          }
+        },
+        "excerpt": {
+          "type": "string",
+          "minLength": 1
+        },
+        "content_hash": {
+          "type": "string",
+          "minLength": 32
+        },
+        "confidence": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "extraction_method": {
+          "type": "string",
+          "enum": ["native_text", "ocr", "spreadsheet", "email", "manual", "other"]
+        }
+      }
+    },
+    "requirement": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "description", "category", "mandatory", "coverage_status", "evidence"],
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "description": {
+          "type": "string",
+          "minLength": 1
+        },
+        "category": {
+          "type": "string",
+          "enum": ["technical", "commercial", "contractual", "quality", "schedule", "documentation", "hse", "other"]
+        },
+        "discipline": {
+          "type": ["string", "null"]
+        },
+        "mandatory": {
+          "type": "boolean"
+        },
+        "coverage_status": {
+          "type": "string",
+          "enum": ["covered", "partial", "not_covered", "not_verifiable", "not_applicable"]
+        },
+        "evidence": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/evidence"
+          }
+        }
+      }
+    },
+    "commitment": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "description", "category", "evidence"],
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "description": {
+          "type": "string",
+          "minLength": 1
+        },
+        "category": {
+          "type": "string",
+          "enum": ["scope", "technical", "commercial", "contractual", "schedule", "assumption", "exclusion", "other"]
+        },
+        "related_requirement_ids": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "evidence": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/evidence"
+          }
+        }
+      }
+    },
+    "finding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "title", "description", "severity", "category", "status", "evidence", "rationale"],
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1
+        },
+        "description": {
+          "type": "string",
+          "minLength": 1
+        },
+        "severity": {
+          "type": "string",
+          "enum": ["critical", "high", "medium", "low", "informational"]
+        },
+        "category": {
+          "type": "string",
+          "enum": ["technical", "commercial", "contractual", "quality", "schedule", "scope", "documentation", "data_quality", "other"]
+        },
+        "status": {
+          "type": "string",
+          "enum": ["confirmed", "potential", "not_verifiable", "resolved", "accepted_risk"]
+        },
+        "requirement_ids": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "commitment_ids": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "evidence": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/evidence"
+          }
+        },
+        "rationale": {
+          "type": "string",
+          "minLength": 1
+        },
+        "recommended_action": {
+          "type": ["string", "null"]
+        }
+      }
+    },
+    "blockingRisk": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["finding_id", "reason", "must_be_resolved_before_submission"],
+      "properties": {
+        "finding_id": {
+          "type": "string"
+        },
+        "reason": {
+          "type": "string",
+          "minLength": 1
+        },
+        "must_be_resolved_before_submission": {
+          "type": "boolean",
+          "const": true
+        }
+      }
+    },
+    "recommendation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "action", "priority"],
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "action": {
+          "type": "string",
+          "minLength": 1
+        },
+        "priority": {
+          "type": "string",
+          "enum": ["immediate", "before_submission", "after_award", "improvement"]
+        },
+        "owner_role": {
+          "type": ["string", "null"]
+        },
+        "related_finding_ids": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "provenance": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "generated_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "triage_skill_version": {
+          "type": "string"
+        },
+        "adherence_skill_version": {
+          "type": "string"
+        },
+        "workflow_version": {
+          "type": "string"
+        },
+        "model_runs": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "provider": {"type": "string"},
+              "model": {"type": "string"},
+              "prompt_version": {"type": "string"},
+              "request_id": {"type": ["string", "null"]}
+            }
+          }
+        }
+      }
+    }
+  }
+}
