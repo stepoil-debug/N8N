@@ -8,8 +8,9 @@ from fastapi import Depends, File, Form, HTTPException, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 
 from .audit_service import generate_artifacts
-from .main import app, auth
+from .main import app, artifact, auth
 from .package_service import analyze_package
+from .proposal_revision import revise_original_proposal
 
 
 def allowed_origins() -> list[str]:
@@ -148,4 +149,16 @@ async def finalize_audit(request: Request) -> dict:
         raise HTTPException(status_code=422, detail="analysis é obrigatória")
     if not isinstance(analysis.get("findings"), list):
         raise HTTPException(status_code=422, detail="analysis.findings deve ser uma lista")
-    return generate_artifacts(opportunity, package, analysis)
+
+    result = generate_artifacts(opportunity, package, analysis)
+    original_based = revise_original_proposal(opportunity, analysis)
+    if original_based is not None:
+        replacement = artifact(str(opportunity["opportunity_id"]), original_based)
+        for index, item in enumerate(result.get("artifacts") or []):
+            if str(item.get("artifact_name", "")).casefold().endswith(".docx"):
+                result["artifacts"][index] = replacement
+                break
+        result["proposal_source"] = "original_step_docx"
+    else:
+        result["proposal_source"] = "generated_model"
+    return result
