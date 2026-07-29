@@ -7,4 +7,4 @@ RUN pip install -r requirements.txt
 COPY app ./app
 RUN mkdir -p /data/artifacts
 EXPOSE 8000
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "2"]
+CMD ["uvicorn", "app.cors_entrypoint:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "2"]
