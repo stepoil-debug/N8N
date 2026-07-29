@@ -3,49 +3,55 @@
 
   const $ = (selector, root = document) => root.querySelector(selector);
   const $$ = (selector, root = document) => [...root.querySelectorAll(selector)];
-  const storageKeys = {
+  const keys = {
     apiUrl: 'stepAudit.apiUrl',
-    webhookUrl: 'stepAudit.webhookUrl',
     history: 'stepAudit.history',
-    token: 'stepAudit.sessionToken'
+    token: 'stepAudit.sessionToken',
+    draft: 'stepAudit.draft'
   };
-
-  let clientFiles = [];
-  let stepFiles = [];
-  let apiOnline = false;
-
-  const pageTitles = {
+  const titles = {
     dashboard: 'Visão geral',
     'new-audit': 'Nova auditoria',
     history: 'Histórico',
     architecture: 'Arquitetura'
   };
 
+  let clientFiles = [];
+  let stepFiles = [];
+  let apiOnline = false;
+
   const settingsDialog = $('#settingsDialog');
   const auditForm = $('#auditForm');
+  const webhookField = $('#webhookUrl');
+  if (webhookField?.closest('label')) webhookField.closest('label').hidden = true;
+
+  function escapeHtml(value) {
+    return String(value ?? '').replace(/[&<>'"]/g, char => ({
+      '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;'
+    })[char]);
+  }
 
   function readHistory() {
-    try { return JSON.parse(localStorage.getItem(storageKeys.history) || '[]'); }
+    try { return JSON.parse(localStorage.getItem(keys.history) || '[]'); }
     catch { return []; }
   }
 
   function saveHistory(items) {
-    localStorage.setItem(storageKeys.history, JSON.stringify(items.slice(0, 50)));
+    localStorage.setItem(keys.history, JSON.stringify(items.slice(0, 50)));
   }
 
   function config() {
     return {
-      apiUrl: (localStorage.getItem(storageKeys.apiUrl) || '').replace(/\/$/, ''),
-      webhookUrl: (localStorage.getItem(storageKeys.webhookUrl) || '').trim(),
-      token: sessionStorage.getItem(storageKeys.token) || ''
+      apiUrl: (localStorage.getItem(keys.apiUrl) || '').trim().replace(/\/$/, ''),
+      token: sessionStorage.getItem(keys.token) || ''
     };
   }
 
-  function apiHeaders(json = false) {
-    const headers = {};
-    if (json) headers['Content-Type'] = 'application/json';
-    if (config().token) headers['x-step-api-key'] = config().token;
-    return headers;
+  function headers(json = false) {
+    const output = {};
+    if (json) output['Content-Type'] = 'application/json';
+    if (config().token) output['X-STEP-API-KEY'] = config().token;
+    return output;
   }
 
   function toast(title, detail = '', type = '') {
@@ -54,12 +60,6 @@
     node.innerHTML = `<strong>${escapeHtml(title)}</strong>${detail ? `<small>${escapeHtml(detail)}</small>` : ''}`;
     $('#toastStack').appendChild(node);
     window.setTimeout(() => node.remove(), 5200);
-  }
-
-  function escapeHtml(value) {
-    return String(value ?? '').replace(/[&<>'"]/g, char => ({
-      '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;'
-    })[char]);
   }
 
   function bytes(value) {
@@ -72,7 +72,7 @@
   function navigate(view) {
     $$('.view').forEach(item => item.classList.toggle('active', item.id === `view-${view}`));
     $$('.nav-item').forEach(item => item.classList.toggle('active', item.dataset.view === view));
-    $('#pageTitle').textContent = pageTitles[view] || 'STEP Audit';
+    $('#pageTitle').textContent = titles[view] || 'STEP Audit';
     $('#sidebar').classList.remove('open');
     if (view === 'history') renderHistory();
     window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -82,7 +82,7 @@
     apiOnline = state === 'online';
     $('#apiDot').className = `status-dot ${state === 'online' ? 'online' : state === 'offline' ? 'offline' : ''}`;
     $('#apiStatus').textContent = state === 'online' ? 'API conectada' : state === 'offline' ? 'API indisponível' : 'API não configurada';
-    $('#apiDetail').textContent = detail || (state === 'online' ? 'Serviço documental respondendo.' : 'Configure a URL da API documental.');
+    $('#apiDetail').textContent = detail || (state === 'online' ? 'Serviço documental respondendo.' : 'Configure a URL pública da API.');
     $('#metricPlatform').textContent = state === 'online' ? 'Online' : state === 'offline' ? 'Offline' : 'Pendente';
   }
 
@@ -94,33 +94,52 @@
       return false;
     }
     setConnection('pending', 'Verificando serviço...');
+    const controller = new AbortController();
+    const timeout = window.setTimeout(() => controller.abort(), 8000);
     try {
-      const response = await fetch(`${apiUrl}/health`, { signal: AbortSignal.timeout(8000) });
+      const response = await fetch(`${apiUrl}/health`, { signal: controller.signal });
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
       const data = await response.json();
       setConnection('online', `${data.service || 'document-api'} · ${data.version || 'online'}`);
       if (showToast) toast('Conexão confirmada', 'A API documental está respondendo.', 'success');
       return true;
     } catch (error) {
-      setConnection('offline', error.message || 'Falha de comunicação');
-      if (showToast) toast('Não foi possível conectar', 'Confira a URL, o HTTPS, o CORS e se o container está ativo.', 'error');
+      setConnection('offline', error.name === 'AbortError' ? 'Tempo limite excedido' : error.message);
+      if (showToast) toast('Não foi possível conectar', 'Confira a URL HTTPS, CORS e o container da API.', 'error');
       return false;
+    } finally {
+      window.clearTimeout(timeout);
     }
+  }
+
+  async function apiJson(path, options = {}) {
+    const response = await fetch(`${config().apiUrl}${path}`, options);
+    const text = await response.text();
+    let body;
+    try { body = text ? JSON.parse(text) : {}; }
+    catch { body = { message: text }; }
+    if (!response.ok) {
+      const detail = typeof body.detail === 'string' ? body.detail : body.detail?.message || body.message;
+      throw new Error(detail || `HTTP ${response.status}`);
+    }
+    return body;
   }
 
   function mergeFiles(current, incoming) {
     const output = [...current];
     for (const file of incoming) {
+      if (file.size > 100 * 1024 * 1024) {
+        toast('Arquivo ignorado', `${file.name} excede 100 MB.`, 'error');
+        continue;
+      }
       if (!output.some(item => item.name === file.name && item.size === file.size && item.lastModified === file.lastModified)) output.push(file);
     }
     return output;
   }
 
   function addFiles(kind, incoming) {
-    const valid = [...incoming].filter(file => file.size <= 100 * 1024 * 1024);
-    if (valid.length !== incoming.length) toast('Arquivo ignorado', 'O limite desta interface é 100 MB por arquivo.', 'error');
-    if (kind === 'client') clientFiles = mergeFiles(clientFiles, valid);
-    else stepFiles = mergeFiles(stepFiles, valid);
+    if (kind === 'client') clientFiles = mergeFiles(clientFiles, [...incoming]);
+    else stepFiles = mergeFiles(stepFiles, [...incoming]);
     renderFiles();
   }
 
@@ -159,22 +178,11 @@
     };
   }
 
-  async function apiJson(path, options = {}) {
-    const { apiUrl } = config();
-    const response = await fetch(`${apiUrl}${path}`, options);
-    const text = await response.text();
-    let body;
-    try { body = text ? JSON.parse(text) : {}; }
-    catch { body = { message: text }; }
-    if (!response.ok) throw new Error(typeof body.detail === 'string' ? body.detail : body.message || `HTTP ${response.status}`);
-    return body;
-  }
-
   async function extractFile(file, opportunityId, sourceType) {
     const form = new FormData();
     form.append('file', file, file.name);
     form.append('opportunity_id', opportunityId);
-    const result = await apiJson('/v1/documents/extract', { method: 'POST', headers: apiHeaders(false), body: form });
+    const result = await apiJson('/v1/documents/extract', { method: 'POST', headers: headers(false), body: form });
     return { source_type: sourceType, original_name: file.name, extracted: result };
   }
 
@@ -184,9 +192,8 @@
 
   async function executeAudit(event) {
     event.preventDefault();
-    const { apiUrl, webhookUrl } = config();
-    if (!apiUrl || !webhookUrl) {
-      toast('Integração incompleta', 'Configure a API documental e o webhook do n8n.', 'error');
+    if (!config().apiUrl) {
+      toast('Integração incompleta', 'Configure a URL pública da API documental.', 'error');
       settingsDialog.showModal();
       return;
     }
@@ -205,7 +212,6 @@
       initiated_at: new Date().toISOString()
     };
     const progress = createProgress();
-    let historyStatus = 'Em processamento';
 
     try {
       progress.set(8, 'Validando conexão com a API documental');
@@ -213,7 +219,7 @@
 
       progress.set(14, 'Criando área segura da oportunidade');
       await apiJson('/v1/opportunities/prepare', {
-        method: 'POST', headers: apiHeaders(true), body: JSON.stringify(opportunity)
+        method: 'POST', headers: headers(true), body: JSON.stringify(opportunity)
       });
 
       const allFiles = [
@@ -228,26 +234,31 @@
         documents.push(await extractFile(current.file, opportunity.opportunity_id, current.source));
       }
 
-      progress.set(72, 'Enviando evidências para o workflow do n8n');
-      const webhookResponse = await fetch(webhookUrl, {
+      progress.set(74, 'Encaminhando evidências ao n8n pela API segura');
+      const workflowResult = await apiJson('/v1/audits/dispatch', {
         method: 'POST',
-        headers: apiHeaders(true),
-        body: JSON.stringify({ opportunity, documents, channel: 'github-pages', requested_outputs: ['xlsx', 'pdf', 'json'] })
+        headers: headers(true),
+        body: JSON.stringify({
+          opportunity,
+          documents,
+          channel: 'github-pages',
+          requested_outputs: ['xlsx', 'pdf', 'json']
+        })
       });
-      const webhookText = await webhookResponse.text();
-      let workflowResult = {};
-      try { workflowResult = webhookText ? JSON.parse(webhookText) : {}; }
-      catch { workflowResult = { message: webhookText }; }
-      if (!webhookResponse.ok) throw new Error(workflowResult.message || `Webhook respondeu HTTP ${webhookResponse.status}`);
 
       progress.set(94, 'Registrando resultado e artefatos');
       const blockers = Number(workflowResult?.summary?.blocking_risks ?? workflowResult?.blocking_risks?.length ?? 0);
-      historyStatus = workflowResult.status || 'Enviada';
       const history = readHistory();
       history.unshift({
-        id: crypto.randomUUID(), opportunityId: opportunity.opportunity_id, client: opportunity.client,
-        rfqId: opportunity.rfq_id, owner: opportunity.owner, documents: allFiles.length,
-        blockers, status: historyStatus, createdAt: new Date().toISOString()
+        id: crypto.randomUUID(),
+        opportunityId: opportunity.opportunity_id,
+        client: opportunity.client,
+        rfqId: opportunity.rfq_id,
+        owner: opportunity.owner,
+        documents: allFiles.length,
+        blockers,
+        status: workflowResult.status || 'Enviada',
+        createdAt: new Date().toISOString()
       });
       saveHistory(history);
       progress.set(100, 'Auditoria encaminhada com sucesso');
@@ -262,8 +273,9 @@
       const history = readHistory();
       history.unshift({
         id: crypto.randomUUID(), opportunityId: opportunity.opportunity_id, client: opportunity.client,
-        rfqId: opportunity.rfq_id, owner: opportunity.owner, documents: clientFiles.length + stepFiles.length,
-        blockers: 0, status: 'Erro', error: error.message, createdAt: new Date().toISOString()
+        rfqId: opportunity.rfq_id, owner: opportunity.owner,
+        documents: clientFiles.length + stepFiles.length, blockers: 0,
+        status: 'Erro', error: error.message, createdAt: new Date().toISOString()
       });
       saveHistory(history);
       updateDashboard();
@@ -278,7 +290,9 @@
     $('#metricBlocks').textContent = history.reduce((total, item) => total + Number(item.blockers || 0), 0);
     const recent = history.slice(0, 4);
     $('#recentAudits').className = recent.length ? '' : 'empty-state';
-    $('#recentAudits').innerHTML = recent.length ? `<div class="file-list">${recent.map(item => `<div class="file-item"><div><strong>${escapeHtml(item.opportunityId)} · ${escapeHtml(item.client)}</strong><small>${new Date(item.createdAt).toLocaleString('pt-BR')} · ${item.documents} documentos</small></div><span class="status-chip ${item.status === 'Erro' ? 'error' : ''}">${escapeHtml(item.status)}</span></div>`).join('')}</div>` : '<div class="empty-icon">◎</div><strong>Nenhuma auditoria registrada</strong><p>Inicie uma oportunidade para acompanhar o progresso aqui.</p>';
+    $('#recentAudits').innerHTML = recent.length
+      ? `<div class="file-list">${recent.map(item => `<div class="file-item"><div><strong>${escapeHtml(item.opportunityId)} · ${escapeHtml(item.client)}</strong><small>${new Date(item.createdAt).toLocaleString('pt-BR')} · ${item.documents} documentos</small></div><span class="status-chip ${item.status === 'Erro' ? 'error' : ''}">${escapeHtml(item.status)}</span></div>`).join('')}</div>`
+      : '<div class="empty-icon">◎</div><strong>Nenhuma auditoria registrada</strong><p>Inicie uma oportunidade para acompanhar o progresso aqui.</p>';
   }
 
   function renderHistory() {
@@ -293,34 +307,35 @@
   }
 
   function saveDraft() {
-    const draft = {
+    localStorage.setItem(keys.draft, JSON.stringify({
       opportunityId: $('#opportunityId').value,
       client: $('#clientName').value,
       rfqId: $('#rfqId').value,
       owner: $('#ownerName').value,
       savedAt: new Date().toISOString()
-    };
-    localStorage.setItem('stepAudit.draft', JSON.stringify(draft));
+    }));
     toast('Rascunho salvo', 'Os dados básicos foram mantidos neste navegador.', 'success');
   }
 
   function restoreDraft() {
     try {
-      const draft = JSON.parse(localStorage.getItem('stepAudit.draft') || '{}');
+      const draft = JSON.parse(localStorage.getItem(keys.draft) || '{}');
       $('#opportunityId').value = draft.opportunityId || '';
       $('#clientName').value = draft.client || '';
       $('#rfqId').value = draft.rfqId || '';
       $('#ownerName').value = draft.owner || '';
-    } catch { /* ignore */ }
+    } catch { /* rascunho inválido */ }
   }
 
   function setupDropzone(dropzone, input, kind) {
     input.addEventListener('change', () => addFiles(kind, input.files));
     ['dragenter', 'dragover'].forEach(name => dropzone.addEventListener(name, event => {
-      event.preventDefault(); dropzone.classList.add('dragging');
+      event.preventDefault();
+      dropzone.classList.add('dragging');
     }));
     ['dragleave', 'drop'].forEach(name => dropzone.addEventListener(name, event => {
-      event.preventDefault(); dropzone.classList.remove('dragging');
+      event.preventDefault();
+      dropzone.classList.remove('dragging');
     }));
     dropzone.addEventListener('drop', event => addFiles(kind, event.dataTransfer.files));
   }
@@ -337,22 +352,22 @@
 
   $('#settingsForm').addEventListener('submit', async event => {
     event.preventDefault();
-    localStorage.setItem(storageKeys.apiUrl, $('#apiUrl').value.trim().replace(/\/$/, ''));
-    localStorage.setItem(storageKeys.webhookUrl, $('#webhookUrl').value.trim());
-    if ($('#apiToken').value) sessionStorage.setItem(storageKeys.token, $('#apiToken').value);
-    else sessionStorage.removeItem(storageKeys.token);
+    localStorage.setItem(keys.apiUrl, $('#apiUrl').value.trim().replace(/\/$/, ''));
+    if ($('#apiToken').value) sessionStorage.setItem(keys.token, $('#apiToken').value);
+    else sessionStorage.removeItem(keys.token);
     settingsDialog.close();
     await testConnection(true);
   });
 
   $('#clearHistory').addEventListener('click', () => {
     if (!window.confirm('Limpar todo o histórico salvo neste navegador?')) return;
-    localStorage.removeItem(storageKeys.history);
-    updateDashboard(); renderHistory(); toast('Histórico limpo', '', 'success');
+    localStorage.removeItem(keys.history);
+    updateDashboard();
+    renderHistory();
+    toast('Histórico limpo', '', 'success');
   });
 
   $('#apiUrl').value = config().apiUrl;
-  $('#webhookUrl').value = config().webhookUrl;
   $('#apiToken').value = config().token;
   restoreDraft();
   renderFiles();
