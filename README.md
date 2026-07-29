@@ -13,6 +13,7 @@ Projeto isolado para automatizar a triagem de RFQs e a validação adversarial d
 - Migration Supabase para oportunidades, documentos, requisitos, compromissos, execuções, achados e artefatos.
 - Painel web responsivo na pasta `site/`.
 - Deploy automático do painel pelo GitHub Pages.
+- Proxy autenticado da API para encaminhar auditorias ao n8n sem expor o webhook.
 - Testes e CI.
 
 ## Painel web
@@ -31,10 +32,10 @@ O painel permite:
 - Separar documentos do cliente e documentos da STEP.
 - Testar conexão com a API documental.
 - Extrair arquivos diretamente pela API protegida.
-- Disparar o webhook de produção do n8n.
+- Encaminhar a auditoria ao n8n por uma rota interna segura.
 - Acompanhar um histórico local sem armazenar documentos no GitHub.
 
-As URLs da API e do webhook ficam no `localStorage` do navegador. O token fica apenas no `sessionStorage` e é apagado quando a aba é fechada.
+A URL pública da API fica no `localStorage` do navegador. O token fica apenas no `sessionStorage` e é apagado quando a aba é fechada. A URL do webhook do n8n permanece somente no `.env` do servidor.
 
 > O GitHub Pages hospeda somente HTML, CSS e JavaScript. O n8n, a API Python, o PostgreSQL, o Redis e o Supabase precisam permanecer em infraestrutura própria.
 
@@ -49,6 +50,14 @@ docker compose up -d --build
 
 Acesse `http://localhost:5678`, crie o administrador e importe os JSONs da pasta `workflows/`.
 
+Em produção, publique a API atrás de HTTPS e configure:
+
+```env
+DOCUMENT_API_CORS_ALLOWED_ORIGINS=https://stepoil-debug.github.io
+N8N_AUDIT_WEBHOOK_URL=http://n8n:5678/webhook/step-audit
+N8N_AUDIT_WEBHOOK_TOKEN=troque-por-um-token-interno
+```
+
 ## Fluxo
 
 ```text
@@ -56,7 +65,7 @@ Painel GitHub Pages
           ↓
 API documental autenticada
           ↓
-         n8n
+proxy interno → n8n
           ↓
 extração e classificação
           ↓
