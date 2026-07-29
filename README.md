@@ -6,6 +6,10 @@ Projeto isolado para automatizar a triagem de RFQs e a validação adversarial d
 
 - n8n em modo fila com PostgreSQL, Redis, worker e task runners externos.
 - API FastAPI para extração de PDF, Excel, Word, CSV, TXT, EML e MSG.
+- Upload único em ZIP para cada oportunidade.
+- Inventário e classificação automática por pasta, nome, formato e conteúdo.
+- Separação automática entre documentos do cliente, documentos STEP e itens a confirmar.
+- Preservação do caminho original do ZIP como referência de evidência.
 - Geração determinística do checklist Excel da Etapa 1.
 - Inventário integral do checklist e geração do PDF de aderência da Etapa 2.
 - Bloqueio do relatório quando houver requisito aplicável sem cobertura.
@@ -13,31 +17,28 @@ Projeto isolado para automatizar a triagem de RFQs e a validação adversarial d
 - Migration Supabase para oportunidades, documentos, requisitos, compromissos, execuções, achados e artefatos.
 - Painel web responsivo na pasta `site/`.
 - Deploy automático do painel pelo GitHub Pages.
-- Proxy autenticado da API para encaminhar auditorias ao n8n sem expor o webhook.
 - Testes e CI.
 
 ## Painel web
 
 O frontend é publicado pelo workflow `.github/workflows/deploy-pages.yml` sempre que houver alteração na pasta `site/`.
 
-URL esperada:
-
 ```text
 https://stepoil-debug.github.io/N8N/
 ```
 
-O painel permite:
+O usuário final precisa apenas:
 
-- Cadastrar uma oportunidade.
-- Separar documentos do cliente e documentos da STEP.
-- Testar conexão com a API documental.
-- Extrair arquivos diretamente pela API protegida.
-- Encaminhar a auditoria ao n8n por uma rota interna segura.
-- Acompanhar um histórico local sem armazenar documentos no GitHub.
+1. Abrir uma nova auditoria.
+2. Selecionar um único arquivo ZIP com toda a oportunidade.
+3. Conferir o inventário gerado automaticamente.
+4. Confirmar os dados da oportunidade e executar.
 
-A URL pública da API fica no `localStorage` do navegador. O token fica apenas no `sessionStorage` e é apagado quando a aba é fechada. A URL do webhook do n8n permanece somente no `.env` do servidor.
+O painel não solicita URL, token ou configuração técnica. A separação preliminar do ZIP ocorre no próprio navegador. Quando o serviço de processamento estiver publicado, seu endereço será definido internamente em `site/config.js`.
 
-> O GitHub Pages hospeda somente HTML, CSS e JavaScript. O n8n, a API Python, o PostgreSQL, o Redis e o Supabase precisam permanecer em infraestrutura própria.
+Arquivos como `Thumbs.db`, `.DS_Store`, `desktop.ini` e temporários do Office são ignorados. Caminhos inseguros, excesso de entradas, arquivos internos muito grandes e taxas de compressão suspeitas são bloqueados.
+
+> O GitHub Pages hospeda somente HTML, CSS e JavaScript. O processamento completo de PDF, MSG, OCR, n8n, PostgreSQL, Redis e Supabase permanece na infraestrutura de execução.
 
 ## Início rápido do backend
 
@@ -50,32 +51,44 @@ docker compose up -d --build
 
 Acesse `http://localhost:5678`, crie o administrador e importe os JSONs da pasta `workflows/`.
 
-Em produção, publique a API atrás de HTTPS e configure:
+Em produção, publique o serviço atrás de HTTPS e configure internamente:
 
 ```env
-DOCUMENT_API_CORS_ALLOWED_ORIGINS=https://stepoil-debug.github.io
-N8N_AUDIT_WEBHOOK_URL=http://n8n:5678/webhook/step-audit
+CORS_ALLOWED_ORIGINS=https://stepoil-debug.github.io
+N8N_AUDIT_WEBHOOK_URL=http://n8n:5678/webhook/step-audit/run
 N8N_AUDIT_WEBHOOK_TOKEN=troque-por-um-token-interno
+MAX_PACKAGE_MB=250
+MAX_ZIP_ENTRIES=2500
+MAX_ZIP_UNCOMPRESSED_MB=1500
+```
+
+Depois, informe o endereço público apenas no arquivo técnico `site/config.js`:
+
+```js
+window.STEP_AUDIT_CONFIG = Object.freeze({
+  apiBaseUrl: 'https://servico-auditoria.exemplo.com',
+  maxZipMb: 250
+});
 ```
 
 ## Fluxo
 
 ```text
-Painel GitHub Pages
+ZIP completo da oportunidade
           ↓
-API documental autenticada
+inventário local no navegador
           ↓
-proxy interno → n8n
+classificação automática
           ↓
-extração e classificação
+serviço documental → n8n
           ↓
-triagem RFQ → checklist Excel
+extração de conteúdo e OCR
           ↓
-requisitos × proposta STEP
+requisitos do cliente × compromissos STEP
           ↓
 validações técnicas/comerciais/contratuais
           ↓
-aprovação humana → PDF + JSON + dashboard
+aprovação humana → PDF + JSON + checklist + dashboard
 ```
 
 Documentos PERENCO e de outros clientes não são versionados neste repositório.
