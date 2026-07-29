@@ -154,3 +154,5 @@ jobs:
         run: |
           rm -f /tmp/step-audit-input.zip /tmp/step-audit-job.json /tmp/step-audit-result.json
           rm -rf /tmp/step-audit-artifacts
+
+# Immediate validation trigger: 2026-07-29T15:01:00Z
