@@ -1,0 +1,94 @@
+name: Apply asynchronous audit patch
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.async-patch/**'
+      - '.github/workflows/apply-async-patch.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+concurrency:
+  group: apply-async-audit-patch
+  cancel-in-progress: false
+
+jobs:
+  apply-and-deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Reconstruct patch
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat .async-patch/part-*.b64 > /tmp/step-audit-patch.b64
+          base64 --decode /tmp/step-audit-patch.b64 > /tmp/step-audit-patch.tar.gz
+          tar -xzf /tmp/step-audit-patch.tar.gz -C .
+
+      - name: Validate complete audit platform
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f site/index.html
+          test -f site/app.js
+          test -f site/config.js
+          test -f scripts/queue_worker.py
+          test -f workflows/40-auditoria-completa.json
+          test -f .github/workflows/process-audit.yml
+          test -f supabase/migrations/002_async_audit_queue.sql
+          grep -q "queueBaseUrl" site/config.js
+          grep -q "step-audit-queue" site/app.js
+          grep -q "GitHub Actions" site/index.html
+          node --check site/app.js
+          node --check site/config.js
+          python -m py_compile scripts/queue_worker.py
+          python -m json.tool workflows/40-auditoria-completa.json >/dev/null
+          python - <<'PY'
+          import yaml
+          for path in ['.github/workflows/process-audit.yml', '.github/workflows/deploy-pages.yml']:
+              with open(path, encoding='utf-8') as handle:
+                  yaml.safe_load(handle)
+          PY
+
+      - name: Commit final structure
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf .async-patch
+          rm -f .github/workflows/apply-async-patch.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          if git diff --cached --quiet; then
+            echo "No changes to commit"
+          else
+            git commit -m "feat: enable asynchronous AI audit queue"
+            git push origin HEAD:main
+          fi
+
+      - name: Configure GitHub Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload site artifact
+        uses: actions/upload-pages-artifact@v4
+        with:
+          path: site
+
+      - name: Deploy GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
