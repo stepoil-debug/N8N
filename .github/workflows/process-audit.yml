@@ -13,6 +13,7 @@ on:
       - 'scripts/build_cli_workflow.py'
       - 'workflows/40-auditoria-completa.json'
       - 'apps/document-api/**'
+      - 'knowledge/**'
 
 permissions:
   contents: read
@@ -54,6 +55,15 @@ jobs:
       N8N_LOG_LEVEL: warn
       LLM_BASE_URL: https://models.github.ai/inference/chat/completions
       LLM_MODEL: openai/gpt-4.1-mini
+      DRAWING_VISION_MODEL: openai/gpt-4.1-mini
+      DRAWING_VISION_MAX_PAGES: '8'
+      DRAWING_VISION_MAX_DETAIL_TILES: '1'
+      DRAWING_VISION_DPI: '190'
+      DRAWING_VISION_MAX_IMAGE_DIMENSION: '2600'
+      DRAWING_VISION_MIN_INTERVAL_SECONDS: '5'
+      DRAWING_VISION_MAX_RETRIES: '3'
+      DRAWING_VISION_MAX_TOKENS: '2600'
+      DRAWING_KNOWLEDGE_PATH: knowledge/offshore_drawing_rules.json
 
     steps:
       - name: Checkout repository
@@ -89,7 +99,7 @@ jobs:
         if: steps.claim.outputs.has_job == 'true'
         run: |
           sudo apt-get update -qq
-          sudo apt-get install -y --no-install-recommends poppler-utils tesseract-ocr tesseract-ocr-por
+          sudo apt-get install -y --no-install-recommends poppler-utils tesseract-ocr tesseract-ocr-por tesseract-ocr-eng
 
       - name: Install document API
         if: steps.claim.outputs.has_job == 'true'

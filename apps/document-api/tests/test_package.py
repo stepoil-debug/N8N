@@ -20,7 +20,8 @@ headers = {"x-step-api-key": "test-key"}
 def make_zip(entries):
     output = io.BytesIO()
     with zipfile.ZipFile(output, "w", zipfile.ZIP_DEFLATED) as archive:
-        for name, content in entries.items(): archive.writestr(name, content)
+        for name, content in entries.items():
+            archive.writestr(name, content)
     return output.getvalue()
 
 
@@ -31,7 +32,11 @@ def test_single_zip_classification():
         "26-762 BEP PERENCO - ENC WP-PCH2-2025-007/05 - Proposal/proposta.md": b"prazo: 30 dias",
         "26-762 BEP PERENCO - ENC WP-PCH2-2025-007/01 - RFQ/Thumbs.db": b"ignored",
     })
-    response = client.post("/v1/packages/analyze", headers=headers, files={"file": ("26-762 BEP PERENCO - ENC WP-PCH2-2025-007.zip", data, "application/zip")})
+    response = client.post(
+        "/v1/packages/analyze",
+        headers=headers,
+        files={"file": ("26-762 BEP PERENCO - ENC WP-PCH2-2025-007.zip", data, "application/zip")},
+    )
     assert response.status_code == 200
     body = response.json()
     assert body["inferred"] == {"opportunity_id": "BEP-26-762", "client": "PERENCO", "rfq_id": "WP-PCH2-2025-007"}
@@ -46,8 +51,16 @@ def test_zip_path_traversal_is_rejected():
     assert response.status_code == 422
 
 
-def test_single_zip_dispatch_without_n8n():
-    data = make_zip({"BEP 26-762 PERENCO/01 - RFQ/rfq.txt": b"requisito", "BEP 26-762 PERENCO/05 - Proposal/proposta.txt": b"compromisso"})
-    response = client.post("/v1/audits/from-package", headers=headers, data={"opportunity_id": "BEP-26-762", "client": "PERENCO", "agents_json": json.dumps(["technical"])}, files={"file": ("package.zip", data, "application/zip")})
-    assert response.status_code == 200
-    assert response.json()["status"] == "package_classified"
+def test_single_zip_dispatch_without_n8n_does_not_fake_completion():
+    data = make_zip({
+        "BEP 26-762 PERENCO/01 - RFQ/rfq.txt": b"requisito",
+        "BEP 26-762 PERENCO/05 - Proposal/proposta.txt": b"compromisso",
+    })
+    response = client.post(
+        "/v1/audits/from-package",
+        headers=headers,
+        data={"opportunity_id": "BEP-26-762", "client": "PERENCO", "agents_json": json.dumps(["technical"])},
+        files={"file": ("package.zip", data, "application/zip")},
+    )
+    assert response.status_code == 503
+    assert "Motor de IA não implantado" in str(response.json())
