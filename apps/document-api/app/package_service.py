@@ -102,6 +102,7 @@ def analyze_package(filename: str, data: bytes, opportunity_id: str | None = Non
     ignored: list[dict[str, Any]] = []
     folders: set[str] = set()
     roots: list[str] = []
+    proposal_sources: list[tuple[int, str, bytes]] = []
     with zipfile.ZipFile(io.BytesIO(data)) as archive:
         infos = archive.infolist()
         if len(infos) > MAX_ENTRIES: raise HTTPException(status_code=413, detail="ZIP contém entradas demais")
@@ -119,18 +120,26 @@ def analyze_package(filename: str, data: bytes, opportunity_id: str | None = Non
                 ignored.append({"path": path, "reason": "system_file", "size_bytes": info.file_size}); continue
             group, owner = classify_group(path)
             item: dict[str, Any] = {"path": path, "filename": name, "extension": ext, "size_bytes": info.file_size, "group": group, "source_owner": owner, "document_type": classify_type(path, group), "evidence_reference": path, "extraction_status": "not_supported", "warnings": []}
+            raw: bytes | None = None
             if ext in SUPPORTED:
                 try:
-                    extracted = extract(name, archive.read(info))
+                    raw = archive.read(info)
+                    extracted = extract(name, raw)
                     item["extraction_status"] = "extracted"
                     item["warnings"] = extracted.get("warnings") or []
                     item["extracted"] = extracted if include_content else preview(extracted)
                 except Exception as exc:
                     item["extraction_status"] = "error"; item["warnings"] = [str(exc)]
             entries.append(item)
+            if group == "proposal" and ext == ".docx" and raw is not None:
+                proposal_sources.append((len(entries) - 1, name, raw))
     root = roots[0] if roots and len(set(roots)) == 1 else None
     inferred = infer_metadata(filename, root)
     resolved = opportunity_id or inferred.get("opportunity_id") or safe(Path(filename).stem, "opportunity")
+    for entry_index, source_name, source_bytes in proposal_sources:
+        source_path = workspace(str(resolved)) / safe(f"Proposta_Original_{source_name}")
+        source_path.write_bytes(source_bytes)
+        entries[entry_index]["source_artifact"] = artifact(str(resolved), source_path)
     summary = {"total_files": len(entries), "total_folders": len(folders), "ignored_files": len(ignored), "groups": dict(Counter(x["group"] for x in entries)), "source_owners": dict(Counter(x["source_owner"] for x in entries)), "document_types": dict(Counter(x["document_type"] for x in entries)), "extraction": dict(Counter(x["extraction_status"] for x in entries))}
     result: dict[str, Any] = {"status": "classified", "package_name": Path(filename).name, "package_size_bytes": len(data), "root_folder": root, "opportunity_id": resolved, "inferred": inferred, "summary": summary, "folders": sorted(folders), "entries": entries, "ignored": ignored, "classified_at": datetime.now(UTC).isoformat()}
     output = workspace(str(resolved)) / "package_manifest.json"
