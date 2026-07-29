@@ -33,18 +33,42 @@ jobs:
       - name: Validate complete audit interface
         shell: bash
         run: |
+          set -euo pipefail
           test -f site/index.html
           test -f site/styles.css
           test -f site/zip.css
           test -f site/results.css
           test -f site/config.js
           test -f site/app.js
+          test -f site/app-parts/app-00.b64
+          test -f site/app-parts/app-01.b64
+          test -f site/app-parts/app-02.b64
           grep -q "STEP Audit" site/index.html
           grep -q "packageFile" site/index.html
           grep -q "view-results" site/index.html
           grep -q "Proposta revisada" site/index.html
-          grep -q "analysis_completed" site/app.js
+          grep -q "queueBaseUrl" site/config.js
           node --check site/app.js
+          node --check site/config.js
+          python - <<'PY'
+          from pathlib import Path
+          import base64
+          import gzip
+
+          parts = sorted(Path('site/app-parts').glob('app-*.b64'))
+          if len(parts) != 3:
+              raise SystemExit(f'Esperados 3 blocos do aplicativo; encontrados {len(parts)}')
+          encoded = ''.join(part.read_text(encoding='utf-8').strip() for part in parts)
+          compressed = base64.b64decode(encoded, validate=True)
+          source = gzip.decompress(compressed).decode('utf-8')
+          required = ('analysis_completed', 'queueBaseUrl', 'step-audit-queue')
+          missing = [marker for marker in required if marker not in source]
+          if missing:
+              raise SystemExit('Cliente assíncrono incompleto: ' + ', '.join(missing))
+          Path('/tmp/step-audit-client.js').write_text(source, encoding='utf-8')
+          print(f'Cliente assíncrono validado: {len(source)} caracteres')
+          PY
+          node --check /tmp/step-audit-client.js
 
       - name: Upload site artifact
         uses: actions/upload-pages-artifact@v4
