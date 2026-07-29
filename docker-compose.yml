@@ -1,0 +1,131 @@
+name: step-industrial-audit
+
+volumes:
+  postgres_data:
+  redis_data:
+  n8n_data:
+  audit_artifacts:
+
+x-n8n-environment: &n8n-environment
+  DB_TYPE: postgresdb
+  DB_POSTGRESDB_HOST: postgres
+  DB_POSTGRESDB_PORT: 5432
+  DB_POSTGRESDB_DATABASE: ${POSTGRES_DB}
+  DB_POSTGRESDB_USER: ${POSTGRES_NON_ROOT_USER}
+  DB_POSTGRESDB_PASSWORD: ${POSTGRES_NON_ROOT_PASSWORD}
+  EXECUTIONS_MODE: queue
+  QUEUE_BULL_REDIS_HOST: redis
+  QUEUE_BULL_REDIS_PORT: 6379
+  QUEUE_HEALTH_CHECK_ACTIVE: "true"
+  N8N_ENCRYPTION_KEY: ${N8N_ENCRYPTION_KEY}
+  N8N_RUNNERS_MODE: external
+  N8N_RUNNERS_AUTH_TOKEN: ${N8N_RUNNERS_AUTH_TOKEN}
+  N8N_RUNNERS_BROKER_LISTEN_ADDRESS: 0.0.0.0
+  OFFLOAD_MANUAL_EXECUTIONS_TO_WORKERS: "true"
+  N8N_HOST: ${N8N_HOST}
+  N8N_PROTOCOL: ${N8N_PROTOCOL}
+  N8N_PORT: ${N8N_PORT}
+  N8N_EDITOR_BASE_URL: ${N8N_EDITOR_BASE_URL}
+  WEBHOOK_URL: ${WEBHOOK_URL}
+  GENERIC_TIMEZONE: ${GENERIC_TIMEZONE}
+  TZ: ${TZ}
+  N8N_DIAGNOSTICS_ENABLED: ${N8N_DIAGNOSTICS_ENABLED}
+  N8N_PERSONALIZATION_ENABLED: ${N8N_PERSONALIZATION_ENABLED}
+  N8N_VERSION_NOTIFICATIONS_ENABLED: ${N8N_VERSION_NOTIFICATIONS_ENABLED}
+  EXECUTIONS_DATA_PRUNE: ${EXECUTIONS_DATA_PRUNE}
+  EXECUTIONS_DATA_MAX_AGE: ${EXECUTIONS_DATA_MAX_AGE}
+  EXECUTIONS_DATA_PRUNE_MAX_COUNT: ${EXECUTIONS_DATA_PRUNE_MAX_COUNT}
+  DOCUMENT_API_URL: ${DOCUMENT_API_URL}
+  DOCUMENT_API_KEY: ${DOCUMENT_API_KEY}
+  SUPABASE_URL: ${SUPABASE_URL}
+  SUPABASE_SERVICE_ROLE_KEY: ${SUPABASE_SERVICE_ROLE_KEY}
+  SUPABASE_STORAGE_BUCKET: ${SUPABASE_STORAGE_BUCKET}
+  LLM_BASE_URL: ${LLM_BASE_URL}
+  LLM_API_KEY: ${LLM_API_KEY}
+  LLM_MODEL: ${LLM_MODEL}
+
+x-n8n-service: &n8n-service
+  image: docker.n8n.io/n8nio/n8n:${N8N_VERSION}
+  restart: unless-stopped
+  environment: *n8n-environment
+  volumes:
+    - n8n_data:/home/node/.n8n
+  depends_on:
+    postgres:
+      condition: service_healthy
+    redis:
+      condition: service_healthy
+    document-api:
+      condition: service_healthy
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_NON_ROOT_USER: ${POSTGRES_NON_ROOT_USER}
+      POSTGRES_NON_ROOT_PASSWORD: ${POSTGRES_NON_ROOT_PASSWORD}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./infra/postgres/init-data.sh:/docker-entrypoint-initdb.d/init-data.sh:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes", "--maxmemory-policy", "noeviction"]
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  document-api:
+    build: ./apps/document-api
+    restart: unless-stopped
+    environment:
+      API_KEY: ${DOCUMENT_API_KEY}
+      MAX_UPLOAD_MB: ${DOCUMENT_API_MAX_UPLOAD_MB}
+      ARTIFACT_ROOT: /data/artifacts
+      TZ: ${TZ}
+    volumes:
+      - audit_artifacts:/data/artifacts
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health', timeout=3)"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+
+  n8n:
+    <<: *n8n-service
+    ports:
+      - "${N8N_PORT}:5678"
+
+  n8n-runner:
+    image: n8nio/runners:${N8N_VERSION}
+    restart: unless-stopped
+    environment:
+      N8N_RUNNERS_AUTH_TOKEN: ${N8N_RUNNERS_AUTH_TOKEN}
+      N8N_RUNNERS_TASK_BROKER_URI: http://n8n:5679
+    depends_on: [n8n]
+
+  n8n-worker:
+    <<: *n8n-service
+    command: worker --concurrency=${N8N_WORKER_CONCURRENCY}
+
+  n8n-worker-runner:
+    image: n8nio/runners:${N8N_VERSION}
+    restart: unless-stopped
+    environment:
+      N8N_RUNNERS_AUTH_TOKEN: ${N8N_RUNNERS_AUTH_TOKEN}
+      N8N_RUNNERS_TASK_BROKER_URI: http://n8n-worker:5679
+    depends_on: [n8n-worker]

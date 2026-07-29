@@ -1,0 +1,14 @@
+{
+  "name": "STEP Audit 20 - Validação de Aderência",
+  "nodes": [
+    {"parameters": {"httpMethod": "POST", "path": "step-audit/adherence", "responseMode": "lastNode", "options": {}}, "id": "bb9f1235-a739-4eb7-9bb4-c056b062bb72", "name": "Aderência Webhook", "type": "n8n-nodes-base.webhook", "typeVersion": 2, "position": [-420, 0], "webhookId": "4b5627ce-032e-4f93-a2b6-94216a54aa3f"},
+    {"parameters": {"jsCode": "const body = $json.body ?? $json; if (!body.opportunity_id) throw new Error('opportunity_id é obrigatório'); if (!body.analysis || typeof body.analysis !== 'object') throw new Error('analysis é obrigatório'); if (!Array.isArray(body.analysis.checklist_inventory)) throw new Error('checklist_inventory é obrigatório'); return [{json: body}];"}, "id": "27f64fd9-e3f4-4876-a586-4b0774b3a7cc", "name": "Validar Cobertura", "type": "n8n-nodes-base.code", "typeVersion": 2, "position": [-180, 0]},
+    {"parameters": {"method": "POST", "url": "={{ $env.DOCUMENT_API_URL + '/v1/adherence/report' }}", "sendHeaders": true, "headerParameters": {"parameters": [{"name": "x-step-api-key", "value": "={{ $env.DOCUMENT_API_KEY }}"}]}, "sendBody": true, "specifyBody": "json", "jsonBody": "={{ $json }}", "options": {"timeout": 180000}}, "id": "3d4e414e-d87d-497f-938c-77078ff64e32", "name": "Gerar Relatório PDF", "type": "n8n-nodes-base.httpRequest", "typeVersion": 4.2, "position": [80, 0]}
+  ],
+  "connections": {"Aderência Webhook": {"main": [[{"node": "Validar Cobertura", "type": "main", "index": 0}]]}, "Validar Cobertura": {"main": [[{"node": "Gerar Relatório PDF", "type": "main", "index": 0}]]}},
+  "active": false,
+  "settings": {"executionOrder": "v1", "timezone": "America/Sao_Paulo"},
+  "versionId": "0a4dd454-119b-4a77-be07-099acaa7ffda",
+  "meta": {"templateCredsSetupCompleted": true},
+  "tags": []
+}

@@ -1,0 +1,13 @@
+{
+  "name": "STEP Audit 00 - Healthcheck",
+  "nodes": [
+    {"parameters": {"httpMethod": "GET", "path": "step-audit/health", "responseMode": "lastNode", "options": {}}, "id": "8d8b112b-1653-4556-9045-536f30c1b84d", "name": "Health Webhook", "type": "n8n-nodes-base.webhook", "typeVersion": 2, "position": [-260, 0], "webhookId": "da7442b1-443f-46af-b643-64ec5794d0c8"},
+    {"parameters": {"url": "={{ $env.DOCUMENT_API_URL + '/health' }}", "options": {"timeout": 10000}}, "id": "53cc459d-5a71-46bf-9174-8fffc0efeb4f", "name": "Document API Health", "type": "n8n-nodes-base.httpRequest", "typeVersion": 4.2, "position": [0, 0]}
+  ],
+  "connections": {"Health Webhook": {"main": [[{"node": "Document API Health", "type": "main", "index": 0}]]}},
+  "active": false,
+  "settings": {"executionOrder": "v1", "timezone": "America/Sao_Paulo"},
+  "versionId": "2425f060-010e-4cd4-8982-3a9477703354",
+  "meta": {"templateCredsSetupCompleted": true},
+  "tags": []
+}

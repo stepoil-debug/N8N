@@ -1,0 +1,14 @@
+{
+  "name": "STEP Audit 10 - Triagem RFQ",
+  "nodes": [
+    {"parameters": {"httpMethod": "POST", "path": "step-audit/triage", "responseMode": "lastNode", "options": {}}, "id": "eb3b3fb5-a9b7-438c-8e99-f9cb4412d36e", "name": "Triagem Webhook", "type": "n8n-nodes-base.webhook", "typeVersion": 2, "position": [-420, 0], "webhookId": "f9e240ea-78c0-4a73-b0b7-b80416fd165d"},
+    {"parameters": {"jsCode": "const body = $json.body ?? $json; if (!body.opportunity_id) throw new Error('opportunity_id é obrigatório'); if (!body.analysis || typeof body.analysis !== 'object') throw new Error('analysis é obrigatório'); return [{json: body}];"}, "id": "ab041441-8085-4afc-975e-a1475898a1d7", "name": "Validar Entrada", "type": "n8n-nodes-base.code", "typeVersion": 2, "position": [-180, 0]},
+    {"parameters": {"method": "POST", "url": "={{ $env.DOCUMENT_API_URL + '/v1/triage/checklist' }}", "sendHeaders": true, "headerParameters": {"parameters": [{"name": "x-step-api-key", "value": "={{ $env.DOCUMENT_API_KEY }}"}]}, "sendBody": true, "specifyBody": "json", "jsonBody": "={{ $json }}", "options": {"timeout": 180000}}, "id": "9d0eb311-b49c-4ea5-b4c2-79161db6f9a2", "name": "Gerar Checklist", "type": "n8n-nodes-base.httpRequest", "typeVersion": 4.2, "position": [80, 0]}
+  ],
+  "connections": {"Triagem Webhook": {"main": [[{"node": "Validar Entrada", "type": "main", "index": 0}]]}, "Validar Entrada": {"main": [[{"node": "Gerar Checklist", "type": "main", "index": 0}]]}},
+  "active": false,
+  "settings": {"executionOrder": "v1", "timezone": "America/Sao_Paulo"},
+  "versionId": "2ce3914f-8610-457c-b6ee-d6a38006ed44",
+  "meta": {"templateCredsSetupCompleted": true},
+  "tags": []
+}
