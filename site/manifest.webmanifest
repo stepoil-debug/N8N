@@ -1,0 +1,17 @@
+{
+  "name": "STEP Audit One",
+  "short_name": "STEP Audit",
+  "description": "Painel de auditoria industrial integrado ao n8n.",
+  "start_url": "./",
+  "display": "standalone",
+  "background_color": "#f3f6fa",
+  "theme_color": "#0b2447",
+  "icons": [
+    {
+      "src": "favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
