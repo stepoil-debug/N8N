@@ -1,6 +1,12 @@
 {
   "application": "STEP Audit One",
-  "version": "1.0.0",
-  "deployment": "github-pages",
-  "updated_at": "2026-07-29T08:10:00-03:00"
+  "version": "1.4",
+  "frontend_mode": "asynchronous_queue",
+  "queue": "supabase_private",
+  "orchestrator": "n8n_cli_github_actions",
+  "model_provider": "github_models",
+  "end_to_end_test": "passed",
+  "test_workflow_run_id": "30468938870",
+  "generated_outputs": 5,
+  "published_at": "2026-07-29T16:15:00Z"
 }
