@@ -10,7 +10,8 @@ on:
       - '.github/workflows/process-audit.yml'
       - 'scripts/queue_worker.py'
       - 'scripts/execute_audit_cli.py'
-      - 'workflows/parts/**'
+      - 'scripts/build_cli_workflow.py'
+      - 'workflows/40-auditoria-completa.json'
       - 'apps/document-api/**'
 
 permissions:
@@ -32,6 +33,7 @@ jobs:
       STEP_AUDIT_RESULT_FILE: /tmp/step-audit-result.json
       STEP_AUDIT_INPUT_FILE: /tmp/step-audit-input.zip
       STEP_AUDIT_PAYLOAD_PATH: /tmp/step-audit-n8n-input.json
+      STEP_AUDIT_WORKFLOW_OUTPUT: /tmp/audit-workflow.json
       STEP_AUDIT_WORKFLOW_ID: STEP_AUDIT_FULL_01
       DOCUMENT_API_PUBLIC_URL: http://127.0.0.1:8000
       DOCUMENT_API_URL: http://127.0.0.1:8000
@@ -103,13 +105,12 @@ jobs:
         if: steps.claim.outputs.has_job == 'true'
         run: npm install --global n8n@2.30.5
 
-      - name: Reconstruct and import audit workflow
+      - name: Build and import CLI audit workflow
         if: steps.claim.outputs.has_job == 'true'
         run: |
-          cat workflows/parts/workflow-*.b64 > /tmp/audit-workflow.b64
-          base64 --decode /tmp/audit-workflow.b64 | gzip -d > /tmp/audit-workflow.json
-          python -m json.tool /tmp/audit-workflow.json >/dev/null
-          n8n import:workflow --input=/tmp/audit-workflow.json
+          python scripts/build_cli_workflow.py
+          python -m json.tool "$STEP_AUDIT_WORKFLOW_OUTPUT" >/dev/null
+          n8n import:workflow --input="$STEP_AUDIT_WORKFLOW_OUTPUT"
 
       - name: Start document API
         if: steps.claim.outputs.has_job == 'true'
@@ -145,5 +146,5 @@ jobs:
       - name: Clean temporary documents
         if: always()
         run: |
-          rm -f /tmp/step-audit-input.zip /tmp/step-audit-job.json /tmp/step-audit-result.json /tmp/step-audit-n8n-input.json
+          rm -f /tmp/step-audit-input.zip /tmp/step-audit-job.json /tmp/step-audit-result.json /tmp/step-audit-n8n-input.json /tmp/audit-workflow.json
           rm -rf /tmp/step-audit-artifacts
