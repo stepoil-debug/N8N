@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """Execute the STEP audit workflow directly through the n8n CLI.
 
-This avoids production webhook registration in short-lived GitHub Actions runners
-while preserving n8n as the orchestration engine.
+The final n8n node persists the completed result to a private temporary file.
+This avoids relying on version-specific CLI stdout formatting.
 """
 
 from __future__ import annotations
@@ -88,57 +88,29 @@ def build_payload(job: dict[str, Any], package: dict[str, Any]) -> dict[str, Any
     }
 
 
-def json_candidates(text: str):
-    decoder = json.JSONDecoder()
-    for index, character in enumerate(text):
-        if character not in "[{":
-            continue
-        try:
-            value, end = decoder.raw_decode(text[index:])
-        except json.JSONDecodeError:
-            continue
-        yield value, index, index + end
-
-
-def find_completed(value: Any) -> dict[str, Any] | None:
-    if isinstance(value, dict):
-        if value.get("status") == "analysis_completed":
-            return value
-        for child in value.values():
-            found = find_completed(child)
-            if found:
-                return found
-    elif isinstance(value, list):
-        for child in value:
-            found = find_completed(child)
-            if found:
-                return found
-    return None
-
-
-def parse_execution_output(stdout: str) -> dict[str, Any]:
-    direct = None
+def load_completed_result() -> dict[str, Any]:
+    if not RESULT_FILE.is_file():
+        fail(
+            "O n8n terminou sem gerar o arquivo de resultado final. "
+            f"Arquivo esperado: {RESULT_FILE}"
+        )
     try:
-        direct = json.loads(stdout)
-    except json.JSONDecodeError:
-        pass
-    if direct is not None:
-        found = find_completed(direct)
-        if found:
-            return found
-    parsed = list(json_candidates(stdout))
-    for value, _start, _end in reversed(parsed):
-        found = find_completed(value)
-        if found:
-            return found
-    tail = stdout[-6000:]
-    fail(f"O n8n terminou sem retornar analysis_completed. Saída final:\n{tail}")
+        result = json.loads(RESULT_FILE.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        fail(f"O arquivo de resultado do n8n é inválido: {exc}")
+    if not isinstance(result, dict) or result.get("status") != "analysis_completed":
+        fail("O n8n não confirmou analysis_completed no resultado persistido")
+    return result
 
 
 def execute_workflow() -> dict[str, Any]:
+    if RESULT_FILE.exists():
+        RESULT_FILE.unlink()
+
     env = os.environ.copy()
     env["STEP_AUDIT_PAYLOAD_PATH"] = str(PAYLOAD_FILE)
-    command = ["n8n", "execute", f"--id={WORKFLOW_ID}", "--rawOutput"]
+    env["STEP_AUDIT_RESULT_FILE"] = str(RESULT_FILE)
+    command = ["n8n", "execute", f"--id={WORKFLOW_ID}"]
     process = subprocess.run(
         command,
         env=env,
@@ -147,6 +119,8 @@ def execute_workflow() -> dict[str, Any]:
         timeout=1500,
         check=False,
     )
+    if process.stdout:
+        print(process.stdout)
     if process.stderr:
         print(process.stderr, file=sys.stderr)
     if process.returncode != 0:
@@ -155,7 +129,7 @@ def execute_workflow() -> dict[str, Any]:
             f"STDOUT:\n{process.stdout[-6000:]}\n"
             f"STDERR:\n{process.stderr[-6000:]}"
         )
-    return parse_execution_output(process.stdout)
+    return load_completed_result()
 
 
 def main() -> int:
@@ -163,6 +137,7 @@ def main() -> int:
     job = payload.get("job")
     if not isinstance(job, dict):
         fail("Arquivo do trabalho não contém job válido")
+
     package = analyze_package(job)
     n8n_payload = build_payload(job, package)
     PAYLOAD_FILE.write_text(
@@ -173,12 +148,17 @@ def main() -> int:
         f"Dossiê preparado: {package.get('summary', {}).get('total_files', 0)} "
         "arquivo(s) extraído(s)."
     )
+
     result = execute_workflow()
     RESULT_FILE.write_text(
         json.dumps(result, ensure_ascii=False, indent=2),
         encoding="utf-8",
     )
-    print(f"Auditoria concluída com {len(result.get('findings') or [])} achado(s).")
+    findings = result.get("findings")
+    if not isinstance(findings, list):
+        analysis = result.get("analysis") if isinstance(result.get("analysis"), dict) else {}
+        findings = analysis.get("findings") if isinstance(analysis.get("findings"), list) else []
+    print(f"Auditoria concluída com {len(findings)} achado(s).")
     return 0
 
 
