@@ -1,0 +1,185 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#0b2447">
+  <meta name="description" content="Painel de auditoria industrial STEP com integração ao n8n.">
+  <title>STEP Audit One</title>
+  <link rel="icon" href="favicon.svg" type="image/svg+xml">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="app-shell">
+    <aside class="sidebar" id="sidebar">
+      <div class="brand">
+        <div class="brand-mark">S1</div>
+        <div><strong>STEP Audit</strong><span>Industrial Intelligence</span></div>
+      </div>
+
+      <nav class="nav" aria-label="Navegação principal">
+        <button class="nav-item active" data-view="dashboard"><span>⌂</span> Visão geral</button>
+        <button class="nav-item" data-view="new-audit"><span>＋</span> Nova auditoria</button>
+        <button class="nav-item" data-view="history"><span>◷</span> Histórico</button>
+        <button class="nav-item" data-view="architecture"><span>⌘</span> Arquitetura</button>
+      </nav>
+
+      <div class="sidebar-footer">
+        <div class="connection-card">
+          <div class="status-row"><span class="status-dot" id="apiDot"></span><strong id="apiStatus">API não configurada</strong></div>
+          <small id="apiDetail">Configure a URL da API documental.</small>
+          <button class="button ghost full" id="openSettings">Configurar integração</button>
+        </div>
+        <small class="version">STEP Audit One · v1.0</small>
+      </div>
+    </aside>
+
+    <main class="main">
+      <header class="topbar">
+        <button class="icon-button mobile-only" id="menuToggle" aria-label="Abrir menu">☰</button>
+        <div>
+          <p class="eyebrow">Sistema de Auditoria Industrial</p>
+          <h1 id="pageTitle">Visão geral</h1>
+        </div>
+        <div class="top-actions">
+          <button class="button secondary" id="testConnection">Testar conexão</button>
+          <button class="button primary" data-go="new-audit">Nova auditoria</button>
+        </div>
+      </header>
+
+      <section class="view active" id="view-dashboard">
+        <div class="hero">
+          <div>
+            <span class="pill">Auditoria adversarial</span>
+            <h2>Compare requisitos do cliente com a proposta STEP antes da submissão.</h2>
+            <p>O n8n coordena extração documental, agentes especialistas, validações objetivas e aprovação humana.</p>
+            <div class="hero-actions">
+              <button class="button primary" data-go="new-audit">Iniciar análise</button>
+              <button class="button ghost" data-go="architecture">Ver arquitetura</button>
+            </div>
+          </div>
+          <div class="hero-orbit" aria-hidden="true">
+            <div class="orbit-core">AI</div>
+            <span class="orbit-node n1">RFQ</span><span class="orbit-node n2">PDF</span>
+            <span class="orbit-node n3">XLSX</span><span class="orbit-node n4">STEP</span>
+          </div>
+        </div>
+
+        <div class="metrics-grid">
+          <article class="metric"><span>Oportunidades locais</span><strong id="metricAudits">0</strong><small>Metadados salvos neste navegador</small></article>
+          <article class="metric"><span>Documentos enviados</span><strong id="metricDocuments">0</strong><small>Cliente + proposta STEP</small></article>
+          <article class="metric"><span>Bloqueios identificados</span><strong id="metricBlocks">0</strong><small>Achados críticos registrados</small></article>
+          <article class="metric"><span>Status da plataforma</span><strong id="metricPlatform">Pendente</strong><small>API documental e n8n</small></article>
+        </div>
+
+        <div class="content-grid">
+          <article class="panel">
+            <div class="panel-head"><div><p class="eyebrow">Pipeline</p><h3>Fluxo da auditoria</h3></div><span class="badge">8 etapas</span></div>
+            <ol class="pipeline">
+              <li><span>1</span><div><strong>Receber documentos</strong><small>RFQ, desenhos, e-mails, Excel e proposta.</small></div></li>
+              <li><span>2</span><div><strong>Extrair e classificar</strong><small>PDF, Office, MSG/EML e OCR.</small></div></li>
+              <li><span>3</span><div><strong>Extrair requisitos</strong><small>Técnicos, comerciais e contratuais.</small></div></li>
+              <li><span>4</span><div><strong>Extrair compromissos STEP</strong><small>Escopo, prazo, preço, premissas e exclusões.</small></div></li>
+              <li><span>5</span><div><strong>Comparar aderência</strong><small>Atendido, parcial, não atendido ou não verificável.</small></div></li>
+              <li><span>6</span><div><strong>Validar regras</strong><small>Cálculos e verificações determinísticas.</small></div></li>
+              <li><span>7</span><div><strong>Aprovação humana</strong><small>Bloqueio de submissão quando necessário.</small></div></li>
+              <li><span>8</span><div><strong>Gerar relatório</strong><small>PDF, JSON, checklist e dashboard.</small></div></li>
+            </ol>
+          </article>
+
+          <article class="panel">
+            <div class="panel-head"><div><p class="eyebrow">Atividade</p><h3>Últimas auditorias</h3></div><button class="text-button" data-go="history">Ver todas</button></div>
+            <div id="recentAudits" class="empty-state"><div class="empty-icon">◎</div><strong>Nenhuma auditoria registrada</strong><p>Inicie uma oportunidade para acompanhar o progresso aqui.</p></div>
+          </article>
+        </div>
+      </section>
+
+      <section class="view" id="view-new-audit">
+        <div class="section-intro"><div><p class="eyebrow">Nova oportunidade</p><h2>Preparar auditoria industrial</h2><p>Separe os documentos do cliente dos documentos produzidos pela STEP.</p></div><span class="secure-note">🔒 Arquivos não são armazenados no GitHub</span></div>
+
+        <form id="auditForm" class="audit-layout">
+          <article class="panel form-panel">
+            <div class="step-title"><span>1</span><div><h3>Identificação</h3><p>Dados básicos da oportunidade.</p></div></div>
+            <div class="form-grid">
+              <label><span>Código da oportunidade *</span><input id="opportunityId" name="opportunityId" required placeholder="Ex.: BEP-26-762"></label>
+              <label><span>Cliente *</span><input id="clientName" name="clientName" required placeholder="Ex.: PERENCO"></label>
+              <label><span>RFQ / referência</span><input id="rfqId" name="rfqId" placeholder="Ex.: WP-PCH2-2025-007"></label>
+              <label><span>Responsável STEP</span><input id="ownerName" name="ownerName" placeholder="Nome do responsável"></label>
+            </div>
+          </article>
+
+          <article class="panel form-panel">
+            <div class="step-title"><span>2</span><div><h3>Documentos do cliente</h3><p>RFQ, especificações, desenhos, e-mails e anexos recebidos.</p></div></div>
+            <label class="dropzone" id="clientDropzone">
+              <input type="file" id="clientFiles" multiple accept=".pdf,.xlsx,.xlsm,.docx,.csv,.txt,.md,.json,.eml,.msg">
+              <span class="drop-icon">⇧</span><strong>Arraste os arquivos ou clique para selecionar</strong><small>PDF, Excel, Word, EML, MSG, CSV e TXT · até 100 MB por arquivo</small>
+            </label>
+            <div class="file-list" id="clientFileList"></div>
+          </article>
+
+          <article class="panel form-panel">
+            <div class="step-title"><span>3</span><div><h3>Documentos da STEP</h3><p>Proposta técnica, comercial, cronograma, preços, desvios e premissas.</p></div></div>
+            <label class="dropzone step-drop" id="stepDropzone">
+              <input type="file" id="stepFiles" multiple accept=".pdf,.xlsx,.xlsm,.docx,.csv,.txt,.md,.json,.eml,.msg">
+              <span class="drop-icon">⇧</span><strong>Arraste os arquivos ou clique para selecionar</strong><small>Os documentos serão identificados como fonte STEP.</small>
+            </label>
+            <div class="file-list" id="stepFileList"></div>
+          </article>
+
+          <article class="panel form-panel">
+            <div class="step-title"><span>4</span><div><h3>Configuração da análise</h3><p>Selecione as frentes que devem participar da auditoria.</p></div></div>
+            <div class="checks-grid">
+              <label class="check-card"><input type="checkbox" name="agents" value="technical" checked><span><strong>Técnica</strong><small>Escopo, materiais, normas, desenhos e testes.</small></span></label>
+              <label class="check-card"><input type="checkbox" name="agents" value="commercial" checked><span><strong>Comercial</strong><small>Preço, moeda, quantidades, impostos e pagamento.</small></span></label>
+              <label class="check-card"><input type="checkbox" name="agents" value="contractual" checked><span><strong>Contratual</strong><small>Multas, garantias, responsabilidades e riscos.</small></span></label>
+              <label class="check-card"><input type="checkbox" name="agents" value="coverage" checked><span><strong>Cobertura</strong><small>Verificação de evidências e itens não verificáveis.</small></span></label>
+            </div>
+          </article>
+
+          <div class="submit-bar">
+            <div><strong id="fileCounter">0 arquivos selecionados</strong><small>Confira a integração antes de executar.</small></div>
+            <button type="button" class="button secondary" id="saveDraft">Salvar rascunho</button>
+            <button type="submit" class="button primary large" id="runAudit">Executar auditoria</button>
+          </div>
+        </form>
+      </section>
+
+      <section class="view" id="view-history">
+        <div class="section-intro"><div><p class="eyebrow">Rastreabilidade</p><h2>Histórico local</h2><p>Este painel guarda apenas metadados no navegador, nunca os documentos.</p></div><button class="button ghost" id="clearHistory">Limpar histórico</button></div>
+        <div class="panel"><div id="historyTable" class="empty-state"><div class="empty-icon">◷</div><strong>Histórico vazio</strong><p>As oportunidades executadas aparecerão aqui.</p></div></div>
+      </section>
+
+      <section class="view" id="view-architecture">
+        <div class="section-intro"><div><p class="eyebrow">Arquitetura</p><h2>Como a plataforma funciona</h2><p>GitHub Pages hospeda somente a interface. O processamento ocorre no n8n e na API privada.</p></div></div>
+        <div class="architecture-flow">
+          <article><span>01</span><strong>Painel web</strong><small>Interface estática no GitHub Pages.</small></article><i>→</i>
+          <article><span>02</span><strong>API documental</strong><small>Extração, OCR e artefatos protegidos.</small></article><i>→</i>
+          <article><span>03</span><strong>n8n</strong><small>Orquestra workflows e agentes.</small></article><i>→</i>
+          <article><span>04</span><strong>Supabase</strong><small>Dados, evidências e histórico.</small></article><i>→</i>
+          <article><span>05</span><strong>Relatórios</strong><small>Checklist, PDF, JSON e dashboard.</small></article>
+        </div>
+        <div class="content-grid architecture-details">
+          <article class="panel"><h3>Camada web</h3><ul class="feature-list"><li>Deploy automático a cada push no main.</li><li>Sem chaves gravadas no repositório.</li><li>Token mantido somente durante a sessão.</li><li>Envio direto para a API configurada.</li></ul></article>
+          <article class="panel"><h3>Camada de processamento</h3><ul class="feature-list"><li>n8n em modo fila com Redis e workers.</li><li>API FastAPI para documentos industriais.</li><li>Agentes especializados e consolidador.</li><li>Validações objetivas antes do relatório.</li></ul></article>
+        </div>
+        <div class="notice warning"><strong>Importante:</strong> o GitHub Pages não executa Docker, n8n, Python ou banco de dados. O backend deve ser publicado em um servidor/VPS e sua URL configurada neste painel.</div>
+      </section>
+    </main>
+  </div>
+
+  <dialog id="settingsDialog" class="settings-dialog">
+    <form method="dialog" id="settingsForm">
+      <div class="dialog-head"><div><p class="eyebrow">Integração</p><h2>Configurar endpoints</h2></div><button class="icon-button" value="cancel" aria-label="Fechar">×</button></div>
+      <label><span>URL da API documental</span><input id="apiUrl" type="url" placeholder="https://api-auditoria.exemplo.com"></label>
+      <label><span>Webhook de produção do n8n</span><input id="webhookUrl" type="url" placeholder="https://n8n.exemplo.com/webhook/step-audit"></label>
+      <label><span>Token da API</span><input id="apiToken" type="password" autocomplete="off" placeholder="Mantido apenas nesta sessão"></label>
+      <div class="notice"><strong>Segurança:</strong> URLs ficam neste navegador. O token é apagado ao fechar a aba.</div>
+      <div class="dialog-actions"><button class="button ghost" value="cancel">Cancelar</button><button class="button primary" value="default" id="saveSettings">Salvar e testar</button></div>
+    </form>
+  </dialog>
+
+  <div class="toast-stack" id="toastStack" aria-live="polite"></div>
+  <script src="app.js" defer></script>
+</body>
+</html>
