@@ -24,8 +24,8 @@
         <button class="nav-item" data-view="architecture"><span>⌘</span> Arquitetura</button>
       </nav>
       <div class="sidebar-footer">
-        <div class="connection-card"><div class="status-row"><span class="status-dot" id="engineDot"></span><strong id="engineStatus">Verificando motor</strong></div><small id="engineDetail">Análise documental, n8n e IA local.</small></div>
-        <small class="version">STEP Audit One · v1.2</small>
+        <div class="connection-card"><div class="status-row"><span class="status-dot" id="engineDot"></span><strong id="engineStatus">Verificando fila</strong></div><small id="engineDetail">GitHub Actions, n8n e GitHub Models.</small></div>
+        <small class="version">STEP Audit One · v1.3</small>
       </div>
     </aside>
 
@@ -50,7 +50,7 @@
           <article class="metric"><span>Auditorias</span><strong id="metricAudits">0</strong><small>Execuções registradas neste navegador</small></article>
           <article class="metric"><span>Documentos analisados</span><strong id="metricDocuments">0</strong><small>Cliente + STEP</small></article>
           <article class="metric"><span>Bloqueios identificados</span><strong id="metricBlocks">0</strong><small>Riscos críticos</small></article>
-          <article class="metric"><span>Motor de IA</span><strong id="metricPlatform">Verificando</strong><small>n8n + modelo local</small></article>
+          <article class="metric"><span>Fila de auditoria</span><strong id="metricPlatform">Verificando</strong><small>GitHub Actions sob demanda</small></article>
         </div>
         <div class="content-grid">
           <article class="panel">
@@ -124,14 +124,15 @@
       <section class="view" id="view-history"><div class="section-intro"><div><p class="eyebrow">Rastreabilidade</p><h2>Histórico local</h2><p>Somente metadados e resultados resumidos são mantidos neste navegador.</p></div><button class="button ghost" id="clearHistory">Limpar histórico</button></div><div class="panel"><div id="historyTable" class="empty-state"><div class="empty-icon">◷</div><strong>Histórico vazio</strong><p>As oportunidades executadas aparecerão aqui.</p></div></div></section>
 
       <section class="view" id="view-architecture">
-        <div class="section-intro"><div><p class="eyebrow">Arquitetura</p><h2>Como a auditoria funciona</h2><p>O GitHub Pages exibe o painel. O processamento pesado ocorre no n8n, na API documental e no modelo local Ollama.</p></div></div>
-        <div class="architecture-flow"><article><span>01</span><strong>ZIP único</strong><small>Pacote completo da oportunidade.</small></article><i>→</i><article><span>02</span><strong>Extração</strong><small>PDF, Office, e-mail e OCR.</small></article><i>→</i><article><span>03</span><strong>IA local</strong><small>Requisitos, compromissos e comparação.</small></article><i>→</i><article><span>04</span><strong>Correções</strong><small>Achados, riscos e novo texto.</small></article><i>→</i><article><span>05</span><strong>Proposta revisada</strong><small>DOCX, PDF, XLSX e JSON.</small></article></div>
-        <div class="notice warning"><strong>Regra de segurança:</strong> preço, prazo ou obrigação sem evidência suficiente são marcados para validação humana, nunca alterados silenciosamente.</div>
+        <div class="section-intro"><div><p class="eyebrow">Arquitetura</p><h2>Como a auditoria funciona</h2><p>O GitHub Pages recebe o pacote, o Supabase mantém a fila privada e o GitHub Actions executa o n8n com GitHub Models sob demanda.</p></div></div>
+        <div class="architecture-flow"><article><span>01</span><strong>ZIP único</strong><small>Upload temporário e privado.</small></article><i>→</i><article><span>02</span><strong>Fila Supabase</strong><small>Status e rastreabilidade.</small></article><i>→</i><article><span>03</span><strong>GitHub Actions + n8n</strong><small>Extração e orquestração sob demanda.</small></article><i>→</i><article><span>04</span><strong>GitHub Models</strong><small>Requisitos, inconsistências e correções.</small></article><i>→</i><article><span>05</span><strong>Proposta revisada</strong><small>DOCX, PDF, XLSX e JSON.</small></article></div>
+        <div class="notice warning"><strong>Regra de segurança:</strong> preço, prazo ou obrigação sem evidência suficiente são marcados para validação humana, nunca alterados silenciosamente. O processamento é assíncrono e pode levar alguns minutos.</div>
       </section>
     </main>
   </div>
   <div class="toast-stack" id="toastStack" aria-live="polite"></div>
   <script src="config.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
   <script src="app.js" defer></script>
 </body>
