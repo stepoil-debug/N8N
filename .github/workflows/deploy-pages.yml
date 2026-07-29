@@ -35,8 +35,12 @@ jobs:
         run: |
           test -f site/index.html
           test -f site/styles.css
+          test -f site/zip.css
+          test -f site/config.js
           test -f site/app.js
           grep -q "STEP Audit" site/index.html
+          grep -q "packageFile" site/index.html
+          node --check site/app.js
 
       - name: Upload site artifact
         uses: actions/upload-pages-artifact@v4
