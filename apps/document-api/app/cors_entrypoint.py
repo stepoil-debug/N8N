@@ -7,11 +7,11 @@ import httpx
 from fastapi import Depends, File, Form, HTTPException, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 
-from . import ai_batch_service  # registra rotas /v1/ai/extract e /v1/ai/audit
 from .audit_service import generate_artifacts
 from .main import app, artifact, auth
 from .package_service import analyze_package
 from .proposal_revision import revise_original_proposal
+from . import ai_batch_service  # noqa: F401  # registra rotas /v1/ai/*
 
 
 def allowed_origins() -> list[str]:
