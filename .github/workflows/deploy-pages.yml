@@ -30,16 +30,20 @@ jobs:
       - name: Configure GitHub Pages
         uses: actions/configure-pages@v5
 
-      - name: Validate static files
+      - name: Validate complete audit interface
         shell: bash
         run: |
           test -f site/index.html
           test -f site/styles.css
           test -f site/zip.css
+          test -f site/results.css
           test -f site/config.js
           test -f site/app.js
           grep -q "STEP Audit" site/index.html
           grep -q "packageFile" site/index.html
+          grep -q "view-results" site/index.html
+          grep -q "Proposta revisada" site/index.html
+          grep -q "analysis_completed" site/app.js
           node --check site/app.js
 
       - name: Upload site artifact
