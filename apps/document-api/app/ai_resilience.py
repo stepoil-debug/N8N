@@ -12,8 +12,9 @@ import httpx
 
 from . import ai_batch_service as base
 
-_MIN_INTERVAL = float(os.getenv("LLM_MIN_INTERVAL_SECONDS", "4"))
-_MAX_RETRIES = int(os.getenv("LLM_MAX_RETRIES", "5"))
+_MIN_INTERVAL = float(os.getenv("LLM_MIN_INTERVAL_SECONDS", "3"))
+_MAX_RETRIES = int(os.getenv("LLM_MAX_RETRIES", "2"))
+_MAX_DOC_CHARS = int(os.getenv("LLM_MAX_DOCUMENT_CHARS", "30000"))
 _lock = asyncio.Lock()
 _last_call = 0.0
 
@@ -24,6 +25,13 @@ def _clean(value: Any) -> str:
 
 def _chunks(text: str, limit: int = 10000) -> list[str]:
     text = _clean(text)
+    if len(text) > _MAX_DOC_CHARS:
+        omitted = len(text) - _MAX_DOC_CHARS
+        text = (
+            text[:_MAX_DOC_CHARS]
+            + f"\n\n[CONTEÚDO ADICIONAL NÃO ENVIADO AO MODELO: {omitted} caracteres. "
+            "Marcar este excedente como não verificável e exigir revisão humana.]"
+        )
     result: list[str] = []
     cursor = 0
     while cursor < len(text):
@@ -190,9 +198,9 @@ async def resilient_model(system: str, user: str, max_tokens: int = 2200) -> dic
                     if response.status_code in {408, 409, 429, 500, 502, 503, 504} and attempt < _MAX_RETRIES:
                         retry_after = response.headers.get("retry-after")
                         try:
-                            delay = float(retry_after) if retry_after else min(8 * attempt, 45)
+                            delay = float(retry_after) if retry_after else min(6 * attempt, 20)
                         except ValueError:
-                            delay = min(8 * attempt, 45)
+                            delay = min(6 * attempt, 20)
                         await asyncio.sleep(max(delay, _MIN_INTERVAL))
                         continue
                     break
@@ -206,7 +214,7 @@ async def resilient_model(system: str, user: str, max_tokens: int = 2200) -> dic
                     flush=True,
                 )
                 if attempt < _MAX_RETRIES:
-                    await asyncio.sleep(min(6 * attempt, 30))
+                    await asyncio.sleep(min(5 * attempt, 15))
                     continue
 
     print(
