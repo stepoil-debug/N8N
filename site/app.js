@@ -4,12 +4,17 @@
   const $ = (selector, root = document) => root.querySelector(selector);
   const $$ = (selector, root = document) => [...root.querySelectorAll(selector)];
   const config = window.STEP_AUDIT_CONFIG || {};
-  const keys = { history: 'stepAudit.history', draft: 'stepAudit.draft' };
-  const titles = { dashboard: 'Visão geral', 'new-audit': 'Nova auditoria', history: 'Histórico', architecture: 'Arquitetura' };
+  const keys = { history: 'stepAudit.history', results: 'stepAudit.results', draft: 'stepAudit.draft' };
+  const titles = { dashboard: 'Visão geral', 'new-audit': 'Nova auditoria', results: 'Resultado', history: 'Histórico', architecture: 'Arquitetura' };
   const groupLabels = { rfq: 'RFQ / Cliente', clarifications: 'Clarificações', material_quotes: 'Cotações de materiais', estimate: 'Orçamento STEP', proposal: 'Proposta STEP', purchase_order: 'Pedido de compra', unclassified: 'A classificar' };
+  const recommendationLabels = { submit: 'APTA PARA ENVIO', submit_with_reservations: 'APTA COM RESSALVAS', review_before_submit: 'REVISAR ANTES DO ENVIO', do_not_submit: 'NÃO ENVIAR' };
+  const severityLabels = { critical: 'Crítico', high: 'Alto', medium: 'Médio', low: 'Baixo', informational: 'Informativo' };
   const ignoredNames = new Set(['thumbs.db', '.ds_store', 'desktop.ini']);
+
   let packageFile = null;
   let packageInventory = null;
+  let engineReady = false;
+  let currentResult = null;
 
   const auditForm = $('#auditForm');
   const packageInput = $('#packageFile');
@@ -20,12 +25,20 @@
   }
 
   function fold(value) { return String(value || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase(); }
+  function readJson(key, fallback) { try { return JSON.parse(localStorage.getItem(key) || JSON.stringify(fallback)); } catch { return fallback; } }
+  function readHistory() { return readJson(keys.history, []); }
+  function readResults() { return readJson(keys.results, {}); }
+  function saveHistory(items) { localStorage.setItem(keys.history, JSON.stringify(items.slice(0, 50))); }
+  function saveResults(items) {
+    const ordered = Object.entries(items).slice(-20);
+    localStorage.setItem(keys.results, JSON.stringify(Object.fromEntries(ordered)));
+  }
 
   function bytes(value) {
-    if (!Number.isFinite(value) || value <= 0) return '0 B';
+    if (!Number.isFinite(Number(value)) || Number(value) <= 0) return '0 B';
     const units = ['B', 'KB', 'MB', 'GB'];
-    const index = Math.min(Math.floor(Math.log(value) / Math.log(1024)), units.length - 1);
-    return `${(value / (1024 ** index)).toFixed(index ? 1 : 0)} ${units[index]}`;
+    const index = Math.min(Math.floor(Math.log(Number(value)) / Math.log(1024)), units.length - 1);
+    return `${(Number(value) / (1024 ** index)).toFixed(index ? 1 : 0)} ${units[index]}`;
   }
 
   function toast(title, detail = '', type = '') {
@@ -33,11 +46,8 @@
     node.className = `toast ${type}`.trim();
     node.innerHTML = `<strong>${escapeHtml(title)}</strong>${detail ? `<small>${escapeHtml(detail)}</small>` : ''}`;
     $('#toastStack').appendChild(node);
-    window.setTimeout(() => node.remove(), 5600);
+    window.setTimeout(() => node.remove(), 6200);
   }
-
-  function readHistory() { try { return JSON.parse(localStorage.getItem(keys.history) || '[]'); } catch { return []; } }
-  function saveHistory(items) { localStorage.setItem(keys.history, JSON.stringify(items.slice(0, 50))); }
 
   function navigate(view) {
     $$('.view').forEach(item => item.classList.toggle('active', item.id === `view-${view}`));
@@ -45,7 +55,40 @@
     $('#pageTitle').textContent = titles[view] || 'STEP Audit';
     $('#sidebar').classList.remove('open');
     if (view === 'history') renderHistory();
+    if (view === 'results') renderResult(currentResult);
     window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+
+  function setEngine(state, detail) {
+    engineReady = state === 'online';
+    $('#engineDot').className = `status-dot ${state === 'online' ? 'online' : state === 'offline' ? 'offline' : ''}`;
+    $('#engineStatus').textContent = state === 'online' ? 'Motor de IA online' : state === 'offline' ? 'Motor de IA indisponível' : 'Verificando motor';
+    $('#engineDetail').textContent = detail || '';
+    $('#metricPlatform').textContent = state === 'online' ? 'Online' : state === 'offline' ? 'Offline' : 'Verificando';
+  }
+
+  async function checkEngine() {
+    const apiBaseUrl = String(config.apiBaseUrl || '').replace(/\/$/, '');
+    if (!apiBaseUrl) {
+      setEngine('offline', 'O backend de auditoria ainda não foi publicado.');
+      return false;
+    }
+    setEngine('checking', 'Conectando ao n8n e à API documental...');
+    const controller = new AbortController();
+    const timeout = window.setTimeout(() => controller.abort(), 8000);
+    try {
+      const response = await fetch(`${apiBaseUrl}/v1/system/status`, { signal: controller.signal });
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      const body = await response.json();
+      if (body.status !== 'ready') throw new Error(body.message || 'Motor não configurado');
+      setEngine('online', 'n8n, extração documental e IA disponíveis.');
+      return true;
+    } catch (error) {
+      setEngine('offline', error.name === 'AbortError' ? 'Tempo limite ao consultar o servidor.' : error.message);
+      return false;
+    } finally {
+      window.clearTimeout(timeout);
+    }
   }
 
   function classifyGroup(path) {
@@ -93,9 +136,7 @@
     return { opportunityId, client, rfqId };
   }
 
-  function countBy(items, field) {
-    return items.reduce((acc, item) => { acc[item[field]] = (acc[item[field]] || 0) + 1; return acc; }, {});
-  }
+  function countBy(items, field) { return items.reduce((acc, item) => { acc[item[field]] = (acc[item[field]] || 0) + 1; return acc; }, {}); }
 
   async function inspectZip(file) {
     if (!window.JSZip) throw new Error('Leitor ZIP não carregado. Atualize a página e tente novamente.');
@@ -155,7 +196,7 @@
       packageFile = file;
       packageInventory = await inspectZip(file);
       renderPackageFile(); renderInventory(); applyInferredMetadata();
-      toast('ZIP inventariado', `${packageInventory.entries.length} arquivos úteis foram classificados.`, 'success');
+      toast('ZIP inventariado', `${packageInventory.entries.length} arquivos úteis foram identificados.`, 'success');
     } catch (error) { clearPackage(); toast('Não foi possível abrir o ZIP', error.message, 'error'); }
   }
 
@@ -165,22 +206,55 @@
   function createProgress() {
     const overlay = document.createElement('div');
     overlay.className = 'progress-overlay';
-    overlay.innerHTML = '<div class="progress-card"><p class="eyebrow">Processamento</p><h2>Preparando auditoria</h2><p id="progressMessage">Validando pacote...</p><div class="progress-bar"><span id="progressFill"></span></div><div class="progress-log" id="progressLog"></div></div>';
+    overlay.innerHTML = '<div class="progress-card"><p class="eyebrow">Auditoria em execução</p><h2>Analisando documentos</h2><p id="progressMessage">Validando pacote...</p><div class="progress-bar"><span id="progressFill"></span></div><div class="progress-log" id="progressLog"></div><small>Não feche esta página durante o processamento.</small></div>';
     document.body.appendChild(overlay);
     return { set(percent, message) { $('#progressFill', overlay).style.width = `${Math.max(4, Math.min(100, percent))}%`; $('#progressMessage', overlay).textContent = message; const line = document.createElement('div'); line.textContent = `${new Date().toLocaleTimeString('pt-BR')} · ${message}`; $('#progressLog', overlay).prepend(line); }, close() { overlay.remove(); } };
   }
 
   async function sendToAgent(opportunity, agents, progress) {
     const apiBaseUrl = String(config.apiBaseUrl || '').replace(/\/$/, '');
-    if (!apiBaseUrl) { progress.set(86, 'Classificação local concluída'); return { status: 'Pacote classificado', summary: packageInventory.groups, localOnly: true }; }
-    progress.set(55, 'Enviando o ZIP único ao serviço do agente');
+    if (!apiBaseUrl) throw new Error('O motor de IA ainda não foi publicado no servidor. O painel está online, mas o n8n e o modelo local não estão conectados.');
+    if (!engineReady && !(await checkEngine())) throw new Error('O motor de IA não está disponível neste momento.');
+    progress.set(25, 'Enviando o ZIP ao processador documental');
     const form = new FormData();
-    form.append('file', packageFile, packageFile.name); form.append('opportunity_id', opportunity.opportunity_id); form.append('client', opportunity.client); form.append('rfq_id', opportunity.rfq_id); form.append('owner', opportunity.owner); form.append('agents_json', JSON.stringify(agents));
-    const response = await fetch(`${apiBaseUrl}/v1/audits/from-package`, { method: 'POST', body: form });
-    const text = await response.text(); let body;
-    try { body = text ? JSON.parse(text) : {}; } catch { body = { message: text }; }
-    if (!response.ok) { const detail = typeof body.detail === 'string' ? body.detail : body.detail?.message || body.message; throw new Error(detail || `Falha HTTP ${response.status}`); }
-    return body;
+    form.append('file', packageFile, packageFile.name);
+    form.append('opportunity_id', opportunity.opportunity_id);
+    form.append('client', opportunity.client);
+    form.append('rfq_id', opportunity.rfq_id);
+    form.append('owner', opportunity.owner);
+    form.append('agents_json', JSON.stringify(agents));
+    const phases = [
+      [38, 'Extraindo textos, planilhas, e-mails e PDFs'],
+      [52, 'Extraindo requisitos do cliente'],
+      [64, 'Extraindo compromissos da proposta STEP'],
+      [74, 'Comparando aderência e localizando inconsistências'],
+      [84, 'Aplicando correções no modelo de proposta'],
+      [91, 'Gerando relatório, planilha, DOCX e PDF']
+    ];
+    let phaseIndex = 0;
+    const phaseTimer = window.setInterval(() => { if (phaseIndex < phases.length) progress.set(...phases[phaseIndex++]); }, 12000);
+    try {
+      const response = await fetch(`${apiBaseUrl}/v1/audits/from-package`, { method: 'POST', body: form });
+      const text = await response.text(); let body;
+      try { body = text ? JSON.parse(text) : {}; } catch { body = { message: text }; }
+      if (!response.ok) { const detail = typeof body.detail === 'string' ? body.detail : body.detail?.message || body.message; throw new Error(detail || `Falha HTTP ${response.status}`); }
+      if (body.status !== 'analysis_completed') throw new Error(body.message || 'A auditoria não retornou o resultado completo.');
+      return body;
+    } finally {
+      window.clearInterval(phaseTimer);
+    }
+  }
+
+  function compactResult(result) {
+    return {
+      status: result.status,
+      opportunity: result.opportunity,
+      summary: result.summary,
+      findings: (result.findings || []).slice(0, 200),
+      corrections: (result.corrections || []).slice(0, 200),
+      artifacts: result.artifacts || [],
+      completed_at: result.completed_at
+    };
   }
 
   async function executeAudit(event) {
@@ -190,18 +264,67 @@
     const opportunity = { opportunity_id: $('#opportunityId').value.trim(), client: $('#clientName').value.trim(), rfq_id: $('#rfqId').value.trim(), owner: $('#ownerName').value.trim() };
     const progress = createProgress();
     try {
-      progress.set(15, 'Validando inventário e caminhos do ZIP');
+      progress.set(10, 'Validando inventário e caminhos do ZIP');
       if (!packageInventory.entries.length) throw new Error('O ZIP não contém arquivos úteis.');
-      progress.set(35, `Separando ${packageInventory.entries.length} arquivos por origem e função`);
       const result = await sendToAgent(opportunity, selectedAgents(), progress);
-      progress.set(94, 'Registrando rastreabilidade da oportunidade');
-      const blockers = Number(result?.summary?.blocking_risks ?? result?.blocking_risks?.length ?? 0);
+      progress.set(97, 'Registrando resultado e links de download');
+      const resultId = crypto.randomUUID();
+      const storedResult = compactResult(result);
+      const results = readResults(); results[resultId] = storedResult; saveResults(results);
       const history = readHistory();
-      history.unshift({ id: crypto.randomUUID(), opportunityId: opportunity.opportunity_id, client: opportunity.client, rfqId: opportunity.rfq_id, owner: opportunity.owner, packageName: packageFile.name, documents: packageInventory.entries.length, ignored: packageInventory.ignored.length, groups: packageInventory.groups, blockers, status: result.status || 'Enviada', localOnly: Boolean(result.localOnly), createdAt: new Date().toISOString() });
+      history.unshift({ id: resultId, opportunityId: opportunity.opportunity_id, client: opportunity.client, rfqId: opportunity.rfq_id, owner: opportunity.owner, packageName: packageFile.name, documents: packageInventory.entries.length, blockers: Number(result.summary?.blocking_risks || 0), recommendation: result.summary?.recommendation || '', status: 'Análise concluída', createdAt: result.completed_at || new Date().toISOString() });
       saveHistory(history);
-      progress.set(100, result.localOnly ? 'Pacote classificado com sucesso' : 'Auditoria encaminhada com sucesso');
-      window.setTimeout(() => { progress.close(); updateDashboard(); navigate('history'); toast(result.localOnly ? 'Classificação concluída' : 'Auditoria iniciada', result.localOnly ? 'O inventário e a separação foram registrados.' : `${opportunity.opportunity_id} foi encaminhada aos agentes.`, 'success'); }, 650);
-    } catch (error) { progress.close(); toast('Falha ao preparar auditoria', error.message || 'Erro inesperado.', 'error'); }
+      currentResult = storedResult;
+      progress.set(100, 'Auditoria concluída e proposta revisada gerada');
+      window.setTimeout(() => { progress.close(); updateDashboard(); renderResult(currentResult); navigate('results'); toast('Auditoria concluída', 'Relatório e proposta revisada estão disponíveis para download.', 'success'); }, 650);
+    } catch (error) {
+      progress.close();
+      toast('Auditoria não concluída', error.message || 'Erro inesperado.', 'error');
+    }
+  }
+
+  function artifactUrl(item) {
+    const base = String(config.apiBaseUrl || '').replace(/\/$/, '');
+    return `${base}${item.download_path || ''}`;
+  }
+
+  function artifactLabel(name) {
+    const lower = String(name || '').toLowerCase();
+    if (lower.includes('proposta_revisada') && lower.endsWith('.docx')) return 'Proposta revisada · Word';
+    if (lower.includes('proposta_revisada') && lower.endsWith('.pdf')) return 'Proposta revisada · PDF';
+    if (lower.includes('relatorio_auditoria')) return 'Relatório de auditoria';
+    if (lower.endsWith('.xlsx')) return 'Matriz completa · Excel';
+    if (lower.endsWith('.json')) return 'Evidências estruturadas · JSON';
+    return name;
+  }
+
+  function renderResult(result) {
+    currentResult = result || currentResult;
+    $('#resultEmpty').hidden = Boolean(currentResult);
+    $('#resultContent').hidden = !currentResult;
+    if (!currentResult) return;
+    const summary = currentResult.summary || {};
+    const opportunity = currentResult.opportunity || {};
+    $('#resultTitle').textContent = `${opportunity.opportunity_id || ''} · ${opportunity.client || ''}`;
+    $('#resultSubtitle').textContent = opportunity.rfq_id ? `RFQ ${opportunity.rfq_id}` : 'Auditoria de proposta';
+    const recommendation = summary.recommendation || 'review_before_submit';
+    const badge = $('#decisionBadge');
+    badge.textContent = recommendationLabels[recommendation] || recommendation;
+    badge.className = `decision-badge ${recommendation === 'do_not_submit' ? 'critical' : recommendation === 'submit' ? 'ok' : ''}`.trim();
+    $('#resultAdherence').textContent = summary.adherence_percent == null ? '—' : `${summary.adherence_percent}%`;
+    $('#resultCoverage').textContent = summary.coverage_percent == null ? '—' : `${summary.coverage_percent}%`;
+    $('#resultFindings').textContent = summary.findings_total ?? currentResult.findings?.length ?? 0;
+    $('#resultBlockers').textContent = summary.blocking_risks ?? 0;
+    $('#resultOpinionTitle').textContent = recommendationLabels[recommendation] || 'Parecer executivo';
+    $('#resultOpinion').textContent = summary.executive_opinion || 'O agente não forneceu parecer executivo.';
+
+    $('#artifactGrid').innerHTML = (currentResult.artifacts || []).map(item => `<div class="artifact-card"><div><strong>${escapeHtml(artifactLabel(item.artifact_name))}</strong><small>${escapeHtml(item.artifact_name)} · ${bytes(item.size_bytes)}</small></div><a class="button secondary" href="${escapeHtml(artifactUrl(item))}" target="_blank" rel="noopener">Baixar</a></div>`).join('') || '<div class="empty-state"><strong>Nenhum artefato retornado</strong></div>';
+
+    const findings = currentResult.findings || [];
+    $('#findingsTable').innerHTML = findings.length ? `<table class="findings-table"><thead><tr><th>ID</th><th>Severidade</th><th>Inconsistência</th><th>Impacto</th><th>Correção</th></tr></thead><tbody>${findings.map(item => { const sev = String(item.severity || 'medium').toLowerCase(); return `<tr><td><strong>${escapeHtml(item.id || '')}</strong></td><td><span class="severity severity-${escapeHtml(sev)}">${escapeHtml(severityLabels[sev] || sev)}</span></td><td><strong>${escapeHtml(item.title || item.inconsistency || '')}</strong><br><small>${escapeHtml(item.client_evidence || '')}</small></td><td>${escapeHtml(item.impact || '')}</td><td>${escapeHtml(item.required_correction || item.recommendation || '')}</td></tr>`; }).join('')}</tbody></table>` : '<div class="empty-state"><strong>Nenhuma inconsistência registrada</strong></div>';
+
+    const corrections = currentResult.corrections || [];
+    $('#correctionsList').innerHTML = corrections.length ? corrections.map(item => `<article class="correction-card"><h4>${escapeHtml(item.id || '')} · ${escapeHtml(item.section || 'Correção')}</h4>${item.current_text ? `<p><strong>Atual:</strong> ${escapeHtml(item.current_text)}</p>` : ''}<p class="corrected"><strong>Texto corrigido:</strong> ${escapeHtml(item.corrected_text || item.reason || '')}</p><p><strong>Motivo:</strong> ${escapeHtml(item.reason || '')}</p>${item.requires_human_validation ? '<span class="validation-chip">VALIDAÇÃO HUMANA OBRIGATÓRIA</span>' : ''}</article>`).join('') : '<div class="empty-state"><strong>Nenhuma correção registrada</strong></div>';
   }
 
   function updateDashboard() {
@@ -209,17 +332,26 @@
     $('#metricAudits').textContent = history.length;
     $('#metricDocuments').textContent = history.reduce((total, item) => total + Number(item.documents || 0), 0);
     $('#metricBlocks').textContent = history.reduce((total, item) => total + Number(item.blockers || 0), 0);
-    $('#metricPlatform').textContent = config.apiBaseUrl ? 'Online' : 'Local';
     const recent = history.slice(0, 4);
     $('#recentAudits').className = recent.length ? '' : 'empty-state';
-    $('#recentAudits').innerHTML = recent.length ? `<div class="file-list">${recent.map(item => `<div class="file-item"><div><strong>${escapeHtml(item.opportunityId)} · ${escapeHtml(item.client)}</strong><small>${new Date(item.createdAt).toLocaleString('pt-BR')} · ${item.documents} arquivos</small></div><span class="status-chip">${escapeHtml(item.status)}</span></div>`).join('')}</div>` : '<div class="empty-icon">◎</div><strong>Nenhuma auditoria registrada</strong><p>Envie um ZIP para começar.</p>';
+    $('#recentAudits').innerHTML = recent.length ? `<div class="file-list">${recent.map(item => `<div class="file-item"><div><strong>${escapeHtml(item.opportunityId)} · ${escapeHtml(item.client)}</strong><small>${new Date(item.createdAt).toLocaleString('pt-BR')} · ${item.documents} arquivos</small></div><button class="history-action" data-result-id="${escapeHtml(item.id)}">Abrir</button></div>`).join('')}</div>` : '<div class="empty-icon">◎</div><strong>Nenhuma auditoria concluída</strong><p>Envie um ZIP para começar.</p>';
+    bindResultButtons();
   }
 
   function renderHistory() {
     const history = readHistory();
-    if (!history.length) { $('#historyTable').className = 'empty-state'; $('#historyTable').innerHTML = '<div class="empty-icon">◷</div><strong>Histórico vazio</strong><p>As oportunidades executadas aparecerão aqui.</p>'; return; }
+    if (!history.length) { $('#historyTable').className = 'empty-state'; $('#historyTable').innerHTML = '<div class="empty-icon">◷</div><strong>Histórico vazio</strong><p>As oportunidades concluídas aparecerão aqui.</p>'; return; }
     $('#historyTable').className = '';
-    $('#historyTable').innerHTML = `<table class="history-table"><thead><tr><th>Oportunidade</th><th>Cliente</th><th>ZIP</th><th>Arquivos</th><th>Status</th><th>Data</th></tr></thead><tbody>${history.map(item => `<tr><td><strong>${escapeHtml(item.opportunityId)}</strong><br><small>${escapeHtml(item.rfqId || '—')}</small></td><td>${escapeHtml(item.client)}</td><td>${escapeHtml(item.packageName || '—')}</td><td>${Number(item.documents || 0)}</td><td><span class="status-chip">${escapeHtml(item.status)}</span></td><td>${new Date(item.createdAt).toLocaleString('pt-BR')}</td></tr>`).join('')}</tbody></table>`;
+    $('#historyTable').innerHTML = `<table class="history-table"><thead><tr><th>Oportunidade</th><th>Cliente</th><th>ZIP</th><th>Arquivos</th><th>Bloqueios</th><th>Status</th><th>Data</th><th></th></tr></thead><tbody>${history.map(item => `<tr><td><strong>${escapeHtml(item.opportunityId)}</strong><br><small>${escapeHtml(item.rfqId || '—')}</small></td><td>${escapeHtml(item.client)}</td><td>${escapeHtml(item.packageName || '—')}</td><td>${Number(item.documents || 0)}</td><td>${Number(item.blockers || 0)}</td><td><span class="status-chip">${escapeHtml(item.status)}</span></td><td>${new Date(item.createdAt).toLocaleString('pt-BR')}</td><td><button class="history-action" data-result-id="${escapeHtml(item.id)}">Abrir resultado</button></td></tr>`).join('')}</tbody></table>`;
+    bindResultButtons();
+  }
+
+  function bindResultButtons() {
+    $$('[data-result-id]').forEach(button => button.addEventListener('click', () => {
+      const result = readResults()[button.dataset.resultId];
+      if (!result) { toast('Resultado não encontrado', 'Os metadados existem, mas o resultado detalhado não está mais neste navegador.', 'error'); return; }
+      currentResult = result; renderResult(result); navigate('results');
+    }));
   }
 
   function saveDraft() {
@@ -240,6 +372,7 @@
   $('#menuToggle').addEventListener('click', () => $('#sidebar').classList.toggle('open'));
   $('#saveDraft').addEventListener('click', saveDraft);
   auditForm.addEventListener('submit', executeAudit);
-  $('#clearHistory').addEventListener('click', () => { if (!window.confirm('Limpar todo o histórico salvo neste navegador?')) return; localStorage.removeItem(keys.history); updateDashboard(); renderHistory(); toast('Histórico limpo', '', 'success'); });
-  restoreDraft(); renderPackageFile(); renderInventory(); updateDashboard();
+  $('#clearHistory').addEventListener('click', () => { if (!window.confirm('Limpar todo o histórico e resultados salvos neste navegador?')) return; localStorage.removeItem(keys.history); localStorage.removeItem(keys.results); currentResult = null; updateDashboard(); renderHistory(); renderResult(null); toast('Histórico limpo', '', 'success'); });
+
+  restoreDraft(); renderPackageFile(); renderInventory(); updateDashboard(); renderResult(null); checkEngine();
 })();
