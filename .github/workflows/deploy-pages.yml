@@ -70,10 +70,59 @@ jobs:
           PY
           node --check /tmp/step-audit-client.js
 
+      - name: Prepare cache-busted Pages artifact
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf /tmp/step-audit-pages
+          cp -R site /tmp/step-audit-pages
+          VERSION="1.4.${GITHUB_RUN_NUMBER}"
+          ASSET_VERSION="${GITHUB_SHA}"
+          python - <<'PY'
+          from pathlib import Path
+          import os
+
+          root = Path('/tmp/step-audit-pages')
+          index = root / 'index.html'
+          text = index.read_text(encoding='utf-8')
+          version = os.environ['VERSION']
+          asset = os.environ['ASSET_VERSION']
+          text = text.replace('STEP Audit One · v1.3', f'STEP Audit One · v{version}')
+          replacements = {
+              'href="styles.css"': f'href="styles.css?v={asset}"',
+              'href="zip.css"': f'href="zip.css?v={asset}"',
+              'href="results.css"': f'href="results.css?v={asset}"',
+              'src="config.js"': f'src="config.js?v={asset}"',
+              'src="app.js"': f'src="app.js?v={asset}"',
+          }
+          for old, new in replacements.items():
+              text = text.replace(old, new)
+          text = text.replace(
+              '<meta name="viewport" content="width=device-width,initial-scale=1">',
+              '<meta name="viewport" content="width=device-width,initial-scale=1">\n'
+              '  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">\n'
+              '  <meta http-equiv="Pragma" content="no-cache">\n'
+              '  <meta http-equiv="Expires" content="0">',
+          )
+          index.write_text(text, encoding='utf-8')
+          print(f'Artifact preparado: STEP Audit One v{version} / {asset[:12]}')
+          PY
+        env:
+          VERSION: 1.4.${{ github.run_number }}
+          ASSET_VERSION: ${{ github.sha }}
+
+      - name: Validate staged artifact
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -q "STEP Audit One · v1.4." /tmp/step-audit-pages/index.html
+          grep -q "config.js?v=${GITHUB_SHA}" /tmp/step-audit-pages/index.html
+          grep -q "app.js?v=${GITHUB_SHA}" /tmp/step-audit-pages/index.html
+
       - name: Upload site artifact
         uses: actions/upload-pages-artifact@v4
         with:
-          path: site
+          path: /tmp/step-audit-pages
 
       - name: Deploy GitHub Pages
         id: deployment
