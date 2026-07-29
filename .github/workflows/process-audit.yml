@@ -1,0 +1,156 @@
+name: Process STEP Audit Queue
+
+on:
+  schedule:
+    - cron: '*/5 * * * *'
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/process-audit.yml'
+      - 'scripts/queue_worker.py'
+      - 'workflows/parts/**'
+      - 'apps/document-api/**'
+
+permissions:
+  contents: read
+  id-token: write
+  models: read
+
+concurrency:
+  group: step-audit-queue-worker
+  cancel-in-progress: false
+
+jobs:
+  process-next-job:
+    runs-on: ubuntu-latest
+    timeout-minutes: 55
+    env:
+      STEP_AUDIT_QUEUE_URL: https://qxmxtbjxkhecqilpnhgq.supabase.co/functions/v1/step-audit-queue
+      STEP_AUDIT_JOB_FILE: /tmp/step-audit-job.json
+      STEP_AUDIT_RESULT_FILE: /tmp/step-audit-result.json
+      STEP_AUDIT_INPUT_FILE: /tmp/step-audit-input.zip
+      DOCUMENT_API_PUBLIC_URL: http://127.0.0.1:8000
+      DOCUMENT_API_URL: http://127.0.0.1:8000
+      DOCUMENT_API_KEY: step-audit-actions
+      API_KEY: step-audit-actions
+      ARTIFACT_ROOT: /tmp/step-audit-artifacts
+      MAX_UPLOAD_MB: '300'
+      MAX_PACKAGE_MB: '250'
+      MAX_ZIP_ENTRIES: '2500'
+      MAX_ZIP_UNCOMPRESSED_MB: '1500'
+      N8N_AUDIT_WEBHOOK_URL: http://127.0.0.1:5678/webhook/step-audit
+      N8N_AUDIT_WEBHOOK_TOKEN: step-audit-internal-actions
+      N8N_ENCRYPTION_KEY: step-audit-ephemeral-actions-key-2026
+      N8N_BLOCK_ENV_ACCESS_IN_NODE: 'false'
+      N8N_DIAGNOSTICS_ENABLED: 'false'
+      N8N_PERSONALIZATION_ENABLED: 'false'
+      N8N_VERSION_NOTIFICATIONS_ENABLED: 'false'
+      N8N_ENFORCE_SETTINGS_FILE_PERMISSIONS: 'false'
+      N8N_LOG_LEVEL: warn
+      N8N_HOST: 127.0.0.1
+      N8N_PORT: '5678'
+      N8N_PROTOCOL: http
+      WEBHOOK_URL: http://127.0.0.1:5678/
+      LLM_BASE_URL: https://models.github.ai/inference/chat/completions
+      LLM_MODEL: openai/gpt-4.1-mini
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: apps/document-api/requirements.txt
+
+      - name: Install queue client
+        run: python -m pip install --disable-pip-version-check httpx==0.28.1
+
+      - name: Request GitHub OIDC token
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const token = await core.getIDToken('step-audit-worker');
+            core.setSecret(token);
+            core.exportVariable('WORKER_OIDC_TOKEN', token);
+
+      - name: Claim next queued audit
+        id: claim
+        run: python scripts/queue_worker.py claim
+
+      - name: Download private ZIP
+        if: steps.claim.outputs.has_job == 'true'
+        run: python scripts/queue_worker.py download
+
+      - name: Install document system dependencies
+        if: steps.claim.outputs.has_job == 'true'
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends poppler-utils tesseract-ocr tesseract-ocr-por
+
+      - name: Install document API
+        if: steps.claim.outputs.has_job == 'true'
+        run: python -m pip install --disable-pip-version-check -r apps/document-api/requirements.txt
+
+      - name: Set up Node.js
+        if: steps.claim.outputs.has_job == 'true'
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install n8n
+        if: steps.claim.outputs.has_job == 'true'
+        run: npm install --global n8n@2.30.5
+
+      - name: Reconstruct, import and activate audit workflow
+        if: steps.claim.outputs.has_job == 'true'
+        run: |
+          cat workflows/parts/workflow-*.b64 > /tmp/audit-workflow.b64
+          base64 --decode /tmp/audit-workflow.b64 | gzip -d > /tmp/audit-workflow.json
+          python -m json.tool /tmp/audit-workflow.json >/dev/null
+          n8n import:workflow --input=/tmp/audit-workflow.json
+          n8n update:workflow --all --active=true
+
+      - name: Start document API and n8n
+        if: steps.claim.outputs.has_job == 'true'
+        env:
+          LLM_API_KEY: ${{ github.token }}
+          PYTHONPATH: apps/document-api
+        run: |
+          python -m uvicorn app.cors_entrypoint:app --host 127.0.0.1 --port 8000 > /tmp/document-api.log 2>&1 &
+          n8n start > /tmp/n8n.log 2>&1 &
+          for attempt in $(seq 1 90); do
+            if curl --fail --silent http://127.0.0.1:8000/health >/dev/null \
+              && curl --fail --silent http://127.0.0.1:5678/healthz >/dev/null; then
+              exit 0
+            fi
+            sleep 2
+          done
+          echo 'Document API log:'
+          cat /tmp/document-api.log || true
+          echo 'n8n log:'
+          cat /tmp/n8n.log || true
+          exit 1
+
+      - name: Execute complete proposal audit
+        if: steps.claim.outputs.has_job == 'true'
+        env:
+          LLM_API_KEY: ${{ github.token }}
+        run: python scripts/queue_worker.py process
+
+      - name: Publish reports and corrected proposal
+        if: steps.claim.outputs.has_job == 'true'
+        run: python scripts/queue_worker.py publish
+
+      - name: Mark job as failed
+        if: failure() && steps.claim.outputs.has_job == 'true'
+        run: python scripts/queue_worker.py fail "A execução GitHub Actions $GITHUB_RUN_ID falhou. Consulte os logs do workflow Process STEP Audit Queue."
+
+      - name: Clean temporary documents
+        if: always()
+        run: |
+          rm -f /tmp/step-audit-input.zip /tmp/step-audit-job.json /tmp/step-audit-result.json
+          rm -rf /tmp/step-audit-artifacts
