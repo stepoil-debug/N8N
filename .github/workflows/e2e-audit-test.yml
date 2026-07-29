@@ -1,0 +1,176 @@
+name: E2E STEP Audit Test
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/e2e-audit-test.yml'
+
+permissions:
+  contents: read
+
+env:
+  QUEUE_URL: https://qxmxtbjxkhecqilpnhgq.supabase.co/functions/v1/step-audit-queue
+  SUPABASE_URL: https://qxmxtbjxkhecqilpnhgq.supabase.co
+  SUPABASE_KEY: sb_publishable_TiGdrzZ6H7TCjQ8wPaAkzA_cQxVxdvr
+  INPUT_BUCKET: step-audit-inputs
+  ORIGIN: https://stepoil-debug.github.io
+
+jobs:
+  end-to-end:
+    runs-on: ubuntu-latest
+    timeout-minutes: 55
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Create synthetic opportunity ZIP
+        run: |
+          python - <<'PY'
+          import zipfile
+          from pathlib import Path
+          path = Path('/tmp/demo-step-audit.zip')
+          root = '26-999 BEP CLIENTE-DEMO - RFQ-DEMO-2026-001'
+          rfq = '''REQUEST FOR QUOTATION - CLIENTE DEMO
+          Escopo obrigatório: fabricar e fornecer 10 spools de tubulação.
+          Material obrigatório: ASTM A106 Gr. B.
+          Prazo máximo de entrega: 30 dias corridos após o pedido de compra.
+          Condição de pagamento: 60 dias após aceite da nota fiscal.
+          Inspeção: teste hidrostático e relatório dimensional obrigatório.
+          Certificados de material EN 10204 3.1 obrigatórios.
+          '''
+          proposal = '''PROPOSTA TÉCNICO-COMERCIAL STEP - DEMONSTRAÇÃO
+          Escopo ofertado: fabricação de 8 spools de tubulação.
+          Material ofertado: ASTM A53 Gr. B.
+          Prazo de entrega: 45 dias corridos após o pedido de compra.
+          Condição de pagamento: 30 dias após emissão da nota fiscal.
+          Testes inclusos: inspeção visual. Teste hidrostático não incluso.
+          Certificados de material serão fornecidos quando disponíveis.
+          '''
+          clarification = '''CLARIFICAÇÃO DO CLIENTE
+          Confirmamos que a quantidade correta é 10 spools e o teste hidrostático faz parte do escopo obrigatório.
+          '''
+          with zipfile.ZipFile(path, 'w', zipfile.ZIP_DEFLATED) as archive:
+              archive.writestr(f'{root}/01 - RFQ/RFQ-DEMO.txt', rfq)
+              archive.writestr(f'{root}/02 - Clarifications/Clarification-01.txt', clarification)
+              archive.writestr(f'{root}/05 - Proposal/Proposta-STEP-DEMO.txt', proposal)
+          print(path, path.stat().st_size)
+          PY
+
+      - name: Prepare private upload
+        run: |
+          python - <<'PY'
+          import json, os, urllib.request
+          from pathlib import Path
+          zip_path = Path('/tmp/demo-step-audit.zip')
+          payload = {
+              'opportunity_id': 'BEP-26-999',
+              'client': 'CLIENTE DEMO',
+              'rfq_id': 'RFQ-DEMO-2026-001',
+              'owner_name': 'Teste automatizado',
+              'agents': ['technical','commercial','contractual','coverage'],
+              'package_name': zip_path.name,
+              'package_size_bytes': zip_path.stat().st_size,
+          }
+          request = urllib.request.Request(
+              os.environ['QUEUE_URL'] + '/submit',
+              data=json.dumps(payload).encode(),
+              headers={'Content-Type':'application/json','Origin':os.environ['ORIGIN']},
+              method='POST',
+          )
+          with urllib.request.urlopen(request, timeout=60) as response:
+              body = json.load(response)
+          token = body['access_token']
+          print(f'::add-mask::{token}')
+          with open(os.environ['GITHUB_ENV'], 'a', encoding='utf-8') as env:
+              env.write(f"JOB_ID={body['job_id']}\n")
+              env.write(f"ACCESS_TOKEN={token}\n")
+              env.write(f"UPLOAD_PATH={body['upload']['path']}\n")
+              env.write(f"UPLOAD_TOKEN={body['upload']['token']}\n")
+          print('Upload preparado para', body['job_id'])
+          PY
+
+      - name: Upload ZIP to private storage
+        run: |
+          npm install --no-save --silent @supabase/supabase-js@2
+          node --input-type=module <<'JS'
+          import fs from 'node:fs';
+          import { createClient } from '@supabase/supabase-js';
+          const client = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_KEY, {
+            auth: { persistSession: false, autoRefreshToken: false }
+          });
+          const bytes = fs.readFileSync('/tmp/demo-step-audit.zip');
+          const { error } = await client.storage.from(process.env.INPUT_BUCKET).uploadToSignedUrl(
+            process.env.UPLOAD_PATH,
+            process.env.UPLOAD_TOKEN,
+            new Blob([bytes], { type: 'application/zip' }),
+            { contentType: 'application/zip' }
+          );
+          if (error) throw error;
+          console.log('ZIP enviado ao bucket privado.');
+          JS
+
+      - name: Queue audit
+        run: |
+          python - <<'PY'
+          import json, os, urllib.request
+          payload = {'job_id': os.environ['JOB_ID'], 'access_token': os.environ['ACCESS_TOKEN']}
+          request = urllib.request.Request(
+              os.environ['QUEUE_URL'] + '/start',
+              data=json.dumps(payload).encode(),
+              headers={'Content-Type':'application/json','Origin':os.environ['ORIGIN']},
+              method='POST',
+          )
+          with urllib.request.urlopen(request, timeout=60) as response:
+              body = json.load(response)
+          if body.get('status') != 'queued':
+              raise SystemExit(f'Fila não confirmou o trabalho: {body}')
+          print('Auditoria adicionada à fila:', body['job_id'])
+          PY
+
+      - name: Wait for complete audit
+        run: |
+          python - <<'PY'
+          import json, os, time, urllib.request
+          payload = {'job_id': os.environ['JOB_ID'], 'access_token': os.environ['ACCESS_TOKEN']}
+          last = None
+          for attempt in range(200):
+              request = urllib.request.Request(
+                  os.environ['QUEUE_URL'] + '/status',
+                  data=json.dumps(payload).encode(),
+                  headers={'Content-Type':'application/json','Origin':os.environ['ORIGIN']},
+                  method='POST',
+              )
+              with urllib.request.urlopen(request, timeout=60) as response:
+                  body = json.load(response)
+              status = body.get('status')
+              if status != last:
+                  print('Status:', status)
+                  last = status
+              if status == 'failed':
+                  raise SystemExit(body.get('error_message') or 'Auditoria falhou')
+              if status == 'completed':
+                  artifacts = body.get('artifacts') or []
+                  result = body.get('result_data') or {}
+                  findings = result.get('findings') or []
+                  if len(artifacts) < 5:
+                      raise SystemExit(f'Esperados 5 artefatos, recebidos {len(artifacts)}')
+                  if not findings:
+                      raise SystemExit('Nenhuma inconsistência foi detectada no caso divergente')
+                  names = [item.get('artifact_name') for item in artifacts]
+                  print('Teste concluído. Artefatos:', names)
+                  print('Achados:', len(findings))
+                  print('Decisão:', (body.get('summary') or {}).get('recommendation'))
+                  break
+              time.sleep(15)
+          else:
+              raise SystemExit('Tempo limite aguardando a auditoria')
+          PY
