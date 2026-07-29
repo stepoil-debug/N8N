@@ -4,6 +4,7 @@
   const JOBS_KEY = 'stepAudit.jobs.v2';
   const STARTS_KEY = 'stepAudit.processingStarts.v1';
   const activeStates = new Set(['awaiting_upload', 'queued', 'processing']);
+  const visibleStatusLabels = new Set(['Preparando upload', 'Na fila', 'Em análise']);
   let lastSignature = '';
 
   function readJobs() {
@@ -52,13 +53,27 @@
   }
 
   function activeJob() {
-    const jobs = readJobs();
-    return jobs.find((job) => activeStates.has(job.status)) || jobs[0] || null;
+    return readJobs().find((job) => activeStates.has(job.status)) || null;
+  }
+
+  function removeProgress() {
+    document.querySelector('#resultEmpty .audit-progress')?.remove();
+  }
+
+  function screenShowsActiveAudit(empty) {
+    const statusTitle = Array.from(empty.children)
+      .find((child) => child.tagName === 'STRONG' && !child.classList.contains('audit-progress'))
+      ?.textContent
+      ?.trim();
+    return visibleStatusLabels.has(statusTitle);
   }
 
   function ensureProgress(job) {
     const empty = document.querySelector('#resultEmpty');
-    if (!empty || !job || !activeStates.has(job.status)) return;
+    if (!empty || !job || !activeStates.has(job.status) || !screenShowsActiveAudit(empty)) {
+      removeProgress();
+      return;
+    }
 
     let wrapper = empty.querySelector('.audit-progress');
     if (!wrapper) {
@@ -92,8 +107,13 @@
 
   function tick() {
     const job = activeJob();
-    const signature = job ? `${job.jobId}:${job.status}:${job.updatedAt}` : '';
-    if (job && (signature !== lastSignature || activeStates.has(job.status))) {
+    if (!job) {
+      lastSignature = '';
+      removeProgress();
+      return;
+    }
+    const signature = `${job.jobId}:${job.status}:${job.updatedAt}`;
+    if (signature !== lastSignature || activeStates.has(job.status)) {
       lastSignature = signature;
       ensureProgress(job);
     }
