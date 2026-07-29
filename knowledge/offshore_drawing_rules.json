@@ -1,0 +1,153 @@
+{
+  "version": "1.0.0",
+  "purpose": "Knowledge base for adversarial review of offshore, oil and gas, fabrication, structural and piping drawings. It supports evidence extraction and inconsistency detection; it does not replace a qualified engineer or licensed standards.",
+  "governance": {
+    "default_decision": "not_verifiable",
+    "blocking_threshold": 0.88,
+    "finding_threshold": 0.72,
+    "human_review_required_for": [
+      "load path adequacy",
+      "structural strength",
+      "fatigue life",
+      "pressure design",
+      "weld sizing adequacy",
+      "bolt preload or torque",
+      "material substitution",
+      "code clause compliance without licensed standard text",
+      "hidden geometry not shown in available views"
+    ],
+    "evidence_policy": [
+      "Never infer a missing weld solely because two parts touch in one view.",
+      "Never infer a missing bolt solely from an open circular feature; confirm assembly intent, BOM, callout, flange pattern or another view.",
+      "A blocking finding requires at least two independent evidence channels or one explicit drawing contradiction.",
+      "Distinguish design omission, drafting omission, fabrication omission and unavailable evidence.",
+      "Use not_verifiable when scale, resolution, revision, referenced detail or standard is unavailable."
+    ]
+  },
+  "drawing_families": [
+    {
+      "id": "general_arrangement",
+      "names": ["GA", "general arrangement", "arranjo geral", "layout"],
+      "expected_content": ["overall dimensions", "orientation", "datums", "interfaces", "access and maintenance envelopes", "section and detail references"]
+    },
+    {
+      "id": "fabrication_detail",
+      "names": ["fabrication", "shop drawing", "detail drawing", "desenho de fabricação"],
+      "expected_content": ["part marks", "dimensions", "materials", "weld symbols", "hole patterns", "edge preparation", "tolerances", "BOM"]
+    },
+    {
+      "id": "assembly",
+      "names": ["assembly", "montagem", "erection"],
+      "expected_content": ["item balloons", "fasteners", "interfaces", "orientation", "sequence notes", "field welds", "removable parts"]
+    },
+    {
+      "id": "weld_map",
+      "names": ["weld map", "mapa de solda", "joint map"],
+      "expected_content": ["joint identifiers", "WPS references", "weld process", "NDE extent", "shop or field status", "traceability"]
+    },
+    {
+      "id": "piping_isometric",
+      "names": ["isometric", "isométrico", "ISO", "spool drawing"],
+      "expected_content": ["line number", "specification", "size", "rating", "flow direction", "weld numbers", "supports", "flanges", "valves", "MTO", "test and insulation notes"]
+    },
+    {
+      "id": "piping_support",
+      "names": ["support drawing", "suporte", "pipe support", "shoe", "guide", "anchor"],
+      "expected_content": ["support type", "load direction", "attachment weld", "base plate", "holes or anchors", "elevation", "clearance", "material"]
+    },
+    {
+      "id": "structural",
+      "names": ["structure", "structural", "steelwork", "SOB", "STR"],
+      "expected_content": ["member marks", "sections", "plate thickness", "connection details", "weld categories", "bolting", "grating and handrail interfaces", "coating zones"]
+    },
+    {
+      "id": "flange_nozzle",
+      "names": ["flange", "nozzle", "nozzle orientation", "interface drawing"],
+      "expected_content": ["size", "class", "facing", "bolt circle", "hole count", "orientation", "gasket", "bolting", "projection", "datum"]
+    }
+  ],
+  "standards_reference_map": [
+    {"id": "ISO_2553", "topic": "symbolic representation of welded joints", "use": "interpretation of weld symbols and arrow-side/other-side system"},
+    {"id": "AWS_A2.4", "topic": "welding, brazing and NDE symbols", "use": "interpretation of American-system weld and examination symbols"},
+    {"id": "AWS_D1.1", "topic": "structural welding steel", "use": "structural steel welding framework when contractually invoked"},
+    {"id": "ISO_5817", "topic": "quality levels for weld imperfections", "use": "quality-level references only when explicitly specified"},
+    {"id": "ISO_17637", "topic": "visual testing of fusion-welded joints", "use": "inspection evidence and acceptance workflow"},
+    {"id": "ISO_4063", "topic": "welding process reference numbers", "use": "WPS and weld map process identification"},
+    {"id": "ISO_15614", "topic": "welding procedure qualification", "use": "WPS/PQR coverage checks"},
+    {"id": "ISO_9606", "topic": "welder qualification", "use": "personnel qualification coverage"},
+    {"id": "ASME_Y14.5", "topic": "dimensioning and tolerancing", "use": "datums, feature control frames, dimensions and tolerances"},
+    {"id": "ISO_1101", "topic": "geometrical tolerancing", "use": "form, orientation, location and run-out symbols"},
+    {"id": "ISO_7200", "topic": "title blocks and document headers", "use": "document identity, revision and administration fields"},
+    {"id": "ASME_B31.3", "topic": "process piping", "use": "piping materials, fabrication, assembly, examination and testing context"},
+    {"id": "ASME_B16.5", "topic": "pipe flanges and flanged fittings", "use": "flange class, dimensions, bolting, gasket and joint cross-checks"},
+    {"id": "ASME_B16.47", "topic": "large diameter steel flanges", "use": "large-bore flange pattern context"},
+    {"id": "ASME_B16.9", "topic": "buttwelding fittings", "use": "fitting type and dimensional context"},
+    {"id": "ASME_B16.11", "topic": "forged socket-welding and threaded fittings", "use": "small-bore fitting and end-connection context"},
+    {"id": "NORSOK_M_101", "topic": "structural steel fabrication", "use": "offshore fabrication, welding and structural bolting context"},
+    {"id": "NORSOK_M_001", "topic": "materials selection", "use": "offshore material and corrosion compatibility context"},
+    {"id": "NORSOK_L_004", "topic": "piping fabrication, installation, flushing and testing", "use": "offshore piping fabrication context"},
+    {"id": "DNV_OS_C401", "topic": "fabrication and testing of offshore structures", "use": "offshore structural fabrication and testing context"},
+    {"id": "DNV_ST_F101", "topic": "submarine pipeline systems", "use": "pipeline materials, welding and NDT context"}
+  ],
+  "weld_checks": [
+    {"id": "W01", "name": "joint_without_defined_joining_method", "question": "Is an interface clearly intended to be permanent but no weld, bolt or other joining method is defined?", "blocking_evidence": ["explicit assembly interface", "BOM or note identifies permanent attachment", "no joining callout in all available views"]},
+    {"id": "W02", "name": "weld_symbol_missing_size", "question": "Does a weld symbol require a size but none is stated or governed by an explicit general note?", "blocking_evidence": ["readable weld symbol", "no general weld-size note", "joint geometry identified"]},
+    {"id": "W03", "name": "weld_length_pitch_incomplete", "question": "For intermittent welds, are length, pitch and side arrangement complete and unambiguous?", "blocking_evidence": ["intermittent weld symbol", "missing or contradictory length/pitch"]},
+    {"id": "W04", "name": "arrow_side_other_side_conflict", "question": "Does the symbol side conflict with the physical joint or referenced detail?", "blocking_evidence": ["standard system identified", "symbol readable", "detail or section confirms side"]},
+    {"id": "W05", "name": "all_around_or_field_weld_conflict", "question": "Is all-around or field-weld intent inconsistent with views, erection notes or accessibility?", "blocking_evidence": ["supplementary symbol readable", "contradictory fabrication/erection evidence"]},
+    {"id": "W06", "name": "groove_preparation_incomplete", "question": "Are groove type, angle, root opening, backing, contour and finish adequately defined when required?", "blocking_evidence": ["groove joint shown", "missing essential preparation information", "no governing WPS/detail"]},
+    {"id": "W07", "name": "weld_map_traceability_gap", "question": "Are weld numbers, WPS, NDE and shop/field status traceable across drawing, weld map and proposal?", "blocking_evidence": ["joint IDs available", "missing or conflicting referenced document"]},
+    {"id": "W08", "name": "weld_accessibility_or_sequence_risk", "question": "Does geometry appear to prevent access, inspection or specified welding sequence?", "blocking_evidence": ["multiple views or section", "clear obstruction", "required process or inspection known"], "always_human_review": true},
+    {"id": "W09", "name": "weld_bom_quantity_conflict", "question": "Do repeated welded items, stiffeners, lugs or clips conflict with BOM quantities or detail callouts?", "blocking_evidence": ["countable repeated geometry", "BOM quantity", "item mark match"]}
+  ],
+  "bolting_checks": [
+    {"id": "B01", "name": "hole_pattern_without_fastener_definition", "question": "Is a connection shown with holes but no bolt/stud/anchor definition in drawing, detail, BOM or governing note?", "blocking_evidence": ["connection intent confirmed", "hole pattern countable", "no fastener definition across references"]},
+    {"id": "B02", "name": "bolt_quantity_vs_hole_count", "question": "Does bolt or stud quantity conflict with the count of required holes after accounting for symmetry and hidden features?", "blocking_evidence": ["complete hole pattern", "BOM quantity", "assembly quantity"]},
+    {"id": "B03", "name": "incomplete_fastener_set", "question": "Are bolt/stud, nut and washer requirements incomplete for the specified connection?", "blocking_evidence": ["fastener type identified", "BOM or note omits required mating components", "no general assembly rule"]},
+    {"id": "B04", "name": "bolt_grade_diameter_length_missing", "question": "Are grade/material, diameter, length or thread definition absent where procurement or fabrication depends on them?", "blocking_evidence": ["fastener required", "no standard item code resolving specification"]},
+    {"id": "B05", "name": "flange_pattern_conflict", "question": "Do size, class, facing, hole count, bolt circle or orientation conflict between flange callout, drawing and MTO?", "blocking_evidence": ["size/class readable", "pattern visible or tabulated", "explicit mismatch"]},
+    {"id": "B06", "name": "slotted_hole_or_oversize_hole_undefined", "question": "Are slot orientation, dimensions, washer/plate coverage and adjustment intent fully defined?", "blocking_evidence": ["slot visible", "missing dimension or orientation", "connection relies on adjustment"]},
+    {"id": "B07", "name": "anchor_or_baseplate_incomplete", "question": "Are anchor layout, projection, edge distances, grout, leveling and template references complete?", "blocking_evidence": ["baseplate/anchor connection", "missing reference affecting fabrication or installation"], "always_human_review": true},
+    {"id": "B08", "name": "bolt_access_or_tool_clearance", "question": "Is there apparent interference preventing insertion, nut rotation or tightening?", "blocking_evidence": ["multiple views or section", "clear physical obstruction"], "always_human_review": true},
+    {"id": "B09", "name": "structural_bolting_traceability", "question": "Are bolt assembly class, coating, lot/traceability and installation method referenced when contractually required?", "blocking_evidence": ["structural bolting standard invoked", "missing project requirement or certificate"]}
+  ],
+  "piping_checks": [
+    {"id": "P01", "name": "line_identity_conflict", "question": "Do line number, size, class/spec, service or insulation conflict across isometric, P&ID, MTO and proposal?"},
+    {"id": "P02", "name": "component_mto_mismatch", "question": "Are valves, flanges, fittings, gaskets, bolts, supports or branches missing or duplicated between drawing and MTO?"},
+    {"id": "P03", "name": "weld_number_sequence_gap", "question": "Are weld numbers missing, duplicated or inconsistent with spool breaks and field welds?"},
+    {"id": "P04", "name": "support_or_restraint_missing", "question": "Does the isometric/reference require a support, guide, anchor or shoe that is absent from the support list or detail?", "always_human_review": true},
+    {"id": "P05", "name": "flange_joint_set_incomplete", "question": "Is a flanged joint missing flange mate, gasket, bolting or rating/facing compatibility evidence?"},
+    {"id": "P06", "name": "branch_connection_undefined", "question": "Is branch type, reinforcement or fitting definition incomplete or contradictory?", "always_human_review": true},
+    {"id": "P07", "name": "test_boundary_or_vent_drain_gap", "question": "Are test limits, vents, drains, blinds or temporary items inconsistent with the stated test scope?"}
+  ],
+  "drawing_integrity_checks": [
+    {"id": "D01", "name": "revision_conflict", "question": "Do title block revision, revision cloud, revision table and proposal reference disagree?"},
+    {"id": "D02", "name": "missing_referenced_detail", "question": "Is a section, detail, standard drawing or note referenced but absent from the package?"},
+    {"id": "D03", "name": "dimension_chain_incomplete", "question": "Are critical location, interface or fabrication dimensions missing or over-defined?"},
+    {"id": "D04", "name": "units_scale_or_projection_undefined", "question": "Are units, scale, projection method or not-to-scale status unclear?"},
+    {"id": "D05", "name": "material_or_thickness_conflict", "question": "Do material grade, thickness, profile or item mark conflict across views, BOM and proposal?"},
+    {"id": "D06", "name": "quantity_balloon_bom_conflict", "question": "Do item balloons and repeated geometry reconcile with BOM quantities?"},
+    {"id": "D07", "name": "datum_tolerance_gap", "question": "Are datums or tolerances absent or contradictory for a controlled interface?", "always_human_review": true},
+    {"id": "D08", "name": "coating_or_surface_zone_conflict", "question": "Do coating, masking, machined surface or weld-zone instructions conflict?"},
+    {"id": "D09", "name": "interface_orientation_conflict", "question": "Do north arrow, vessel axis, elevation, nozzle clocking or handedness conflict across views?"}
+  ],
+  "severity_guidance": {
+    "critical": ["credible immediate safety or pressure-boundary failure", "missing primary load-path connection with explicit evidence"],
+    "high": ["fabrication cannot proceed unambiguously", "missing required permanent connection", "explicit flange/bolt/weld contradiction", "material or rating mismatch"],
+    "medium": ["drafting omission with probable engineering intent", "traceability or inspection gap", "BOM quantity mismatch without safety consequence established"],
+    "low": ["clarification, presentation, document administration or non-blocking completeness issue"],
+    "informational": ["observation requiring human interpretation with insufficient evidence"]
+  },
+  "vision_output_schema": {
+    "drawing_class": "general_arrangement|fabrication_detail|assembly|weld_map|piping_isometric|piping_support|structural|flange_nozzle|other",
+    "title_block": {"drawing_number": "string", "revision": "string", "title": "string", "scale": "string", "units": "string", "status": "string"},
+    "observations": "array",
+    "welds": "array",
+    "bolted_connections": "array",
+    "holes_and_patterns": "array",
+    "bom_items": "array",
+    "issues": "array with rule_id, title, evidence, contradiction, correction, confidence, severity, blocking, requires_human_review",
+    "needs_detail_tiles": "array of top_left, top_right, bottom_left, bottom_right",
+    "confidence": "0..1"
+  }
+}
