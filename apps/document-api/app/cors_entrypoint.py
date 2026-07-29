@@ -7,6 +7,7 @@ import httpx
 from fastapi import Depends, File, Form, HTTPException, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 
+from . import ai_batch_service  # registra rotas /v1/ai/extract e /v1/ai/audit
 from .audit_service import generate_artifacts
 from .main import app, artifact, auth
 from .package_service import analyze_package
