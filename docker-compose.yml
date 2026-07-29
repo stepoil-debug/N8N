@@ -96,6 +96,7 @@ services:
       API_KEY: ${DOCUMENT_API_KEY}
       MAX_UPLOAD_MB: ${DOCUMENT_API_MAX_UPLOAD_MB}
       ARTIFACT_ROOT: /data/artifacts
+      CORS_ALLOWED_ORIGINS: ${DOCUMENT_API_CORS_ALLOWED_ORIGINS}
       TZ: ${TZ}
     volumes:
       - audit_artifacts:/data/artifacts
