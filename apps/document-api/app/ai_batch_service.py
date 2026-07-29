@@ -9,6 +9,7 @@ from typing import Any
 import httpx
 from fastapi import Depends, HTTPException, Request
 
+from .drawing_vision import analyze_drawing_entry, drawing_findings
 from .main import app, auth
 
 MAX_CHARS = int(os.getenv("LLM_MAX_CHUNK_CHARS", "14000"))
@@ -41,8 +42,11 @@ def entry_text(entry: dict[str, Any]) -> str:
     elif kind == "email":
         for mail in content:
             blocks.append("\n".join([
-                f"Assunto: {clean(mail.get('subject'))}", f"De: {clean(mail.get('from'))}",
-                f"Para: {clean(mail.get('to'))}", f"Data: {clean(mail.get('date'))}", clean(mail.get("body")),
+                f"Assunto: {clean(mail.get('subject'))}",
+                f"De: {clean(mail.get('from'))}",
+                f"Para: {clean(mail.get('to'))}",
+                f"Data: {clean(mail.get('date'))}",
+                clean(mail.get("body")),
             ]))
     else:
         for part in content:
@@ -93,12 +97,16 @@ async def model(system: str, user: str, max_tokens: int = 3000) -> dict[str, Any
     payload = {
         "model": os.getenv("LLM_MODEL", "openai/gpt-4.1-mini"),
         "messages": [{"role": "system", "content": system}, {"role": "user", "content": user}],
-        "stream": False, "temperature": 0.1, "max_tokens": min(max_tokens, 3500),
+        "stream": False,
+        "temperature": 0.1,
+        "max_tokens": min(max_tokens, 3500),
         "response_format": {"type": "json_object"},
     }
     headers = {
-        "Accept": "application/vnd.github+json", "Content-Type": "application/json",
-        "Authorization": f"Bearer {key}", "X-GitHub-Api-Version": API_VERSION,
+        "Accept": "application/vnd.github+json",
+        "Content-Type": "application/json",
+        "Authorization": f"Bearer {key}",
+        "X-GitHub-Api-Version": API_VERSION,
     }
     url = os.getenv("LLM_BASE_URL", "https://models.github.ai/inference/chat/completions")
     async with httpx.AsyncClient(timeout=httpx.Timeout(300.0, connect=20.0)) as client:
@@ -156,14 +164,30 @@ async def batched_extract(request: Request) -> dict[str, Any]:
     package = body.get("package")
     if not isinstance(package, dict) or not isinstance(package.get("entries"), list):
         raise HTTPException(status_code=422, detail="package.entries é obrigatório")
+
     requirements: list[dict[str, Any]] = []
     commitments: list[dict[str, Any]] = []
     unverifiable: list[dict[str, Any]] = []
     summaries: list[dict[str, Any]] = []
+    drawing_analysis: list[dict[str, Any]] = []
     processed = 0
+
     for entry in package["entries"]:
         if not isinstance(entry, dict) or entry.get("extraction_status") != "extracted":
             continue
+
+        if (entry.get("drawing_visuals") or {}).get("status") == "prepared":
+            visual = await analyze_drawing_entry(entry)
+            drawing_analysis.append(visual)
+            for warning in visual.get("warnings") or []:
+                unverifiable.append(
+                    {
+                        "topic": "Cobertura visual do desenho",
+                        "reason": warning,
+                        "source_document": entry.get("path"),
+                    }
+                )
+
         parts = chunks(entry_text(entry))
         for index, part in enumerate(parts, 1):
             result = await extract_piece(entry, part, index, len(parts))
@@ -173,17 +197,28 @@ async def batched_extract(request: Request) -> dict[str, Any]:
             if isinstance(result.get("document_summary"), dict):
                 summaries.append(result["document_summary"])
             processed += 1
+
     requirements = renumber(dedupe(requirements, ("source_document", "source_location", "requirement")), "REQ")
     commitments = renumber(dedupe(commitments, ("source_document", "source_location", "commitment")), "COM")
     if not requirements:
         raise HTTPException(status_code=422, detail="Nenhum requisito do cliente foi extraído")
     if not commitments:
         raise HTTPException(status_code=422, detail="Nenhum compromisso STEP foi extraído")
+
     result = {
-        "requirements": requirements, "commitments": commitments,
+        "requirements": requirements,
+        "commitments": commitments,
         "not_verifiable": dedupe(unverifiable, ("source_document", "topic", "reason")),
         "document_summary": dedupe(summaries, ("source_document", "summary")),
-        "batch_info": {"processed_chunks": processed, "max_chunk_chars": MAX_CHARS, "model": os.getenv("LLM_MODEL", "")},
+        "drawing_analysis": drawing_analysis,
+        "batch_info": {
+            "processed_chunks": processed,
+            "max_chunk_chars": MAX_CHARS,
+            "model": os.getenv("LLM_MODEL", ""),
+            "drawing_model": os.getenv("DRAWING_VISION_MODEL", os.getenv("LLM_MODEL", "")),
+            "drawings_analyzed": len(drawing_analysis),
+            "drawing_pages_analyzed": sum(int(item.get("pages_analyzed") or 0) for item in drawing_analysis),
+        },
     }
     return {"response": json.dumps(result, ensure_ascii=False)}
 
@@ -195,8 +230,11 @@ def requirement_batches(items: list[dict[str, Any]]) -> list[list[dict[str, Any]
     for item in items:
         encoded = json.dumps(item, ensure_ascii=False)
         if current and (len(current) >= 8 or size + len(encoded) > 7000):
-            batches.append(current); current = []; size = 0
-        current.append(item); size += len(encoded)
+            batches.append(current)
+            current = []
+            size = 0
+        current.append(item)
+        size += len(encoded)
     if current:
         batches.append(current)
     return batches
@@ -212,7 +250,8 @@ def related_commitments(batch: list[dict[str, Any]], all_items: list[dict[str, A
         encoded = json.dumps(item, ensure_ascii=False)
         if selected and size + len(encoded) > 8000:
             break
-        selected.append(item); size += len(encoded)
+        selected.append(item)
+        size += len(encoded)
     return selected
 
 
@@ -238,7 +277,15 @@ def summary(assessments: list[dict[str, Any]], findings: list[dict[str, Any]]) -
         risk, rec = "medium", "submit_with_reservations"
     else:
         risk, rec = "low", "submit"
-    return {"recommendation": rec, "risk_level": risk, "executive_opinion": f"Foram avaliados {len(statuses)} requisitos, com {len(findings)} achados e {len(blockers)} bloqueio(s).", "adherence_percent": adherence, "coverage_percent": coverage, "findings_total": len(findings), "blocking_risks": len(blockers)}
+    return {
+        "recommendation": rec,
+        "risk_level": risk,
+        "executive_opinion": f"Foram avaliados {len(statuses)} requisitos, com {len(findings)} achados e {len(blockers)} bloqueio(s).",
+        "adherence_percent": adherence,
+        "coverage_percent": coverage,
+        "findings_total": len(findings),
+        "blocking_risks": len(blockers),
+    }
 
 
 async def proposal(opportunity: dict[str, Any], findings: list[dict[str, Any]], corrections: list[dict[str, Any]]) -> dict[str, Any]:
@@ -248,7 +295,21 @@ async def proposal(opportunity: dict[str, Any], findings: list[dict[str, Any]], 
     try:
         return await model(system, user, 3000)
     except HTTPException:
-        return {"corrected_proposal": {"title": "Proposta Técnico-Comercial Revisada", "introduction": "Versão para revisão humana.", "sections": [{"title": "Correções requeridas", "paragraphs": [], "bullets": [clean(x.get("corrected_text")) for x in corrections if clean(x.get("corrected_text"))]}], "exclusions": ["Dados sem evidência exigem validação humana."]}, "assumptions": ["Baseada nas evidências disponíveis."]}
+        return {
+            "corrected_proposal": {
+                "title": "Proposta Técnico-Comercial Revisada",
+                "introduction": "Versão para revisão humana.",
+                "sections": [
+                    {
+                        "title": "Correções requeridas",
+                        "paragraphs": [],
+                        "bullets": [clean(x.get("corrected_text")) for x in corrections if clean(x.get("corrected_text"))],
+                    }
+                ],
+                "exclusions": ["Dados sem evidência exigem validação humana."],
+            },
+            "assumptions": ["Baseada nas evidências disponíveis."],
+        }
 
 
 @app.post("/v1/ai/audit", dependencies=[Depends(auth)])
@@ -260,6 +321,7 @@ async def batched_audit(request: Request) -> dict[str, Any]:
     reqs, commitments = objects(extraction.get("requirements")), objects(extraction.get("commitments"))
     if not reqs or not commitments:
         raise HTTPException(status_code=422, detail="Extração sem requisitos ou compromissos")
+
     assessments: list[dict[str, Any]] = []
     findings: list[dict[str, Any]] = []
     corrections: list[dict[str, Any]] = []
@@ -269,11 +331,45 @@ async def batched_audit(request: Request) -> dict[str, Any]:
         assessments.extend(objects(result.get("requirement_assessments")))
         findings.extend(objects(result.get("findings")))
         corrections.extend(objects(result.get("corrections")))
+
+    visual_findings, visual_corrections, visual_unverifiable = drawing_findings(objects(extraction.get("drawing_analysis")))
+    findings.extend(visual_findings)
+    corrections.extend(visual_corrections)
+
     assessments = dedupe(assessments, ("requirement_id",))
     amap = {clean(x.get("requirement_id")): x for x in assessments}
-    normalized = [{**r, "status": (amap.get(clean(r.get("id"))) or {}).get("status", "not_verifiable"), "matched_commitment_ids": (amap.get(clean(r.get("id"))) or {}).get("matched_commitment_ids", []), "assessment_reason": (amap.get(clean(r.get("id"))) or {}).get("assessment_reason", "")} for r in reqs]
-    findings = renumber(dedupe(findings, ("title", "inconsistency", "required_correction")), "F")
-    corrections = renumber(dedupe(corrections, ("section", "corrected_text", "reason")), "C")
+    normalized = [
+        {
+            **r,
+            "status": (amap.get(clean(r.get("id"))) or {}).get("status", "not_verifiable"),
+            "matched_commitment_ids": (amap.get(clean(r.get("id"))) or {}).get("matched_commitment_ids", []),
+            "assessment_reason": (amap.get(clean(r.get("id"))) or {}).get("assessment_reason", ""),
+        }
+        for r in reqs
+    ]
+    findings = renumber(dedupe(findings, ("title", "inconsistency", "required_correction", "source_document", "source_location")), "F")
+    corrections = renumber(dedupe(corrections, ("section", "corrected_text", "reason", "source_document")), "C")
+    combined_unverifiable = dedupe(
+        objects(extraction.get("not_verifiable")) + visual_unverifiable,
+        ("source_document", "source_location", "topic", "reason"),
+    )
     draft = await proposal(opportunity, findings, corrections)
-    final = {"summary": summary(assessments, findings), "requirements": normalized, "commitments": commitments, "findings": findings, "corrections": corrections, "corrected_proposal": draft.get("corrected_proposal") or {}, "assumptions": draft.get("assumptions") or [], "not_verifiable": extraction.get("not_verifiable") or [], "batch_info": {"audit_batches": len(batches), "extraction": extraction.get("batch_info") or {}, "model": os.getenv("LLM_MODEL", "")}}
+    final = {
+        "summary": summary(assessments, findings),
+        "requirements": normalized,
+        "commitments": commitments,
+        "findings": findings,
+        "corrections": corrections,
+        "corrected_proposal": draft.get("corrected_proposal") or {},
+        "assumptions": draft.get("assumptions") or [],
+        "not_verifiable": combined_unverifiable,
+        "drawing_analysis": extraction.get("drawing_analysis") or [],
+        "batch_info": {
+            "audit_batches": len(batches),
+            "extraction": extraction.get("batch_info") or {},
+            "model": os.getenv("LLM_MODEL", ""),
+            "drawing_findings": len(visual_findings),
+            "drawing_not_verifiable": len(visual_unverifiable),
+        },
+    }
     return {"response": json.dumps(final, ensure_ascii=False)}
