@@ -1,13 +1,36 @@
 {
-  "name": "STEP Audit 30 - Orquestrador",
+  "name": "STEP Audit 30 - Orquestrador ZIP Único",
   "nodes": [
-    {"parameters": {"httpMethod": "POST", "path": "step-audit/run", "responseMode": "lastNode", "options": {}}, "id": "2248b486-07d1-4dfb-b43c-b03d295f05bc", "name": "Audit Run Webhook", "type": "n8n-nodes-base.webhook", "typeVersion": 2, "position": [-620, 0], "webhookId": "49dd0bee-30a1-45bc-af07-b8c9fcebc457"},
-    {"parameters": {"jsCode": "const body = $json.body ?? $json; if (!body.opportunity_id) throw new Error('opportunity_id é obrigatório'); if (!body.triage_analysis) throw new Error('triage_analysis é obrigatório'); return [{json: body}];"}, "id": "4f40ca2d-60d6-41d6-9277-9d458ef2cab3", "name": "Validar Execução", "type": "n8n-nodes-base.code", "typeVersion": 2, "position": [-400, 0]},
-    {"parameters": {"method": "POST", "url": "={{ $env.DOCUMENT_API_URL + '/v1/triage/checklist' }}", "sendHeaders": true, "headerParameters": {"parameters": [{"name": "x-step-api-key", "value": "={{ $env.DOCUMENT_API_KEY }}"}]}, "sendBody": true, "specifyBody": "json", "jsonBody": "={{ { opportunity_id: $json.opportunity_id, analysis: $json.triage_analysis } }}", "options": {"timeout": 180000}}, "id": "f51039b1-e76c-46c3-bfbb-80b845b275f4", "name": "Gerar Checklist", "type": "n8n-nodes-base.httpRequest", "typeVersion": 4.2, "position": [-150, 0]},
-    {"parameters": {"method": "POST", "url": "={{ $env.DOCUMENT_API_URL + '/v1/adherence/inventory/from-artifact' }}", "sendHeaders": true, "headerParameters": {"parameters": [{"name": "x-step-api-key", "value": "={{ $env.DOCUMENT_API_KEY }}"}]}, "sendBody": true, "specifyBody": "json", "jsonBody": "={{ { opportunity_id: $json.opportunity_id, artifact_name: $json.artifact_name } }}", "options": {"timeout": 180000}}, "id": "15ecfd0d-bdce-49f4-8a84-d6cae482317f", "name": "Inventariar Checklist", "type": "n8n-nodes-base.httpRequest", "typeVersion": 4.2, "position": [100, 0]},
-    {"parameters": {"jsCode": "return [{json:{status:'triage_completed', opportunity_id:$json.opportunity_id, checklist_inventory:$json.checklist_inventory, total_nonempty_rows:$json.total_nonempty_rows, applicable_rows:$json.applicable_rows, next_step:'Executar agentes especialistas e chamar /step-audit/adherence'}}];"}, "id": "892408b5-0186-4492-9f60-af27d87ebefc", "name": "Resposta Etapa 1", "type": "n8n-nodes-base.code", "typeVersion": 2, "position": [350, 0]}
+    {
+      "parameters": {"httpMethod": "POST", "path": "step-audit/run", "responseMode": "lastNode", "options": {}},
+      "id": "2248b486-07d1-4dfb-b43c-b03d295f05bc",
+      "name": "Audit ZIP Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [-620, 0],
+      "webhookId": "49dd0bee-30a1-45bc-af07-b8c9fcebc457"
+    },
+    {
+      "parameters": {"jsCode": "const body = $json.body ?? $json; const opportunity = body.opportunity ?? {}; const pkg = body.package ?? {}; if (!opportunity.opportunity_id) throw new Error('opportunity.opportunity_id é obrigatório'); if (!Array.isArray(pkg.entries) || pkg.entries.length === 0) throw new Error('package.entries é obrigatório'); const clientDocs = pkg.entries.filter(item => item.source_owner === 'client'); const stepDocs = pkg.entries.filter(item => item.source_owner === 'step'); const unknownDocs = pkg.entries.filter(item => item.source_owner === 'unknown'); return [{json:{...body, opportunity, package:pkg, classification:{client_documents:clientDocs, step_documents:stepDocs, unknown_documents:unknownDocs, groups:pkg.summary?.groups ?? {}, ignored:pkg.ignored ?? []}}}];"},
+      "id": "4f40ca2d-60d6-41d6-9277-9d458ef2cab3",
+      "name": "Validar e Separar Pacote",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [-360, 0]
+    },
+    {
+      "parameters": {"jsCode": "const c=$json.classification; return [{json:{status:'package_received', opportunity:$json.opportunity, package_summary:$json.package.summary, classification_summary:{client_documents:c.client_documents.length,step_documents:c.step_documents.length,unknown_documents:c.unknown_documents.length,groups:c.groups,ignored:c.ignored.length},agents_requested:$json.opportunity.agents ?? [],next_step:'Executar agentes técnico, comercial, contratual e cobertura usando os documentos classificados.'}}];"},
+      "id": "892408b5-0186-4492-9f60-af27d87ebefc",
+      "name": "Resposta do Orquestrador",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [-90, 0]
+    }
   ],
-  "connections": {"Audit Run Webhook": {"main": [[{"node": "Validar Execução", "type": "main", "index": 0}]]}, "Validar Execução": {"main": [[{"node": "Gerar Checklist", "type": "main", "index": 0}]]}, "Gerar Checklist": {"main": [[{"node": "Inventariar Checklist", "type": "main", "index": 0}]]}, "Inventariar Checklist": {"main": [[{"node": "Resposta Etapa 1", "type": "main", "index": 0}]]}},
+  "connections": {
+    "Audit ZIP Webhook": {"main": [[{"node": "Validar e Separar Pacote", "type": "main", "index": 0}]]},
+    "Validar e Separar Pacote": {"main": [[{"node": "Resposta do Orquestrador", "type": "main", "index": 0}]]}
+  },
   "active": false,
   "settings": {"executionOrder": "v1", "timezone": "America/Sao_Paulo"},
   "versionId": "560f718f-0e42-42e5-9072-acde3c39db92",
