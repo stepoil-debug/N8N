@@ -2,11 +2,25 @@
   'use strict';
 
   const JOBS_KEY = 'stepAudit.jobs.v2';
+  const STARTS_KEY = 'stepAudit.processingStarts.v1';
   const activeStates = new Set(['awaiting_upload', 'queued', 'processing']);
   let lastSignature = '';
 
   function readJobs() {
     try { return JSON.parse(localStorage.getItem(JOBS_KEY) || '[]'); } catch { return []; }
+  }
+
+  function readStarts() {
+    try { return JSON.parse(localStorage.getItem(STARTS_KEY) || '{}'); } catch { return {}; }
+  }
+
+  function processingStart(job) {
+    const starts = readStarts();
+    if (job.status === 'processing' && !starts[job.jobId]) {
+      starts[job.jobId] = new Date().toISOString();
+      localStorage.setItem(STARTS_KEY, JSON.stringify(starts));
+    }
+    return starts[job.jobId] || job.claimedAt || job.createdAt;
   }
 
   function elapsedMinutes(value) {
@@ -16,7 +30,7 @@
 
   function progressFor(job) {
     const status = job?.status || 'queued';
-    const age = elapsedMinutes(job.updatedAt || job.createdAt);
+    const age = elapsedMinutes(job.createdAt);
 
     if (status === 'completed') return { percent: 100, stage: 'Auditoria concluída', detail: 'Relatórios e proposta revisada disponíveis.' };
     if (status === 'failed') return { percent: Math.max(5, Number(job.progressPercent || 0)), stage: 'Processamento interrompido', detail: job.errorMessage || 'A execução não foi concluída.' };
@@ -29,8 +43,7 @@
       };
     }
 
-    // Durante processing, o avanço é dividido pelas etapas reais do pipeline.
-    const started = elapsedMinutes(job.claimedAt || job.updatedAt || job.createdAt);
+    const started = elapsedMinutes(processingStart(job));
     if (started < 1.5) return { percent: 28 + started * 8, stage: 'Preparando ambiente', detail: 'Inicializando n8n, Python e serviços documentais.' };
     if (started < 3.5) return { percent: 40 + (started - 1.5) * 8, stage: 'Extraindo documentos', detail: 'Lendo PDF, Word, Excel, e-mails, desenhos e OCR.' };
     if (started < 6.5) return { percent: 56 + (started - 3.5) * 7, stage: 'Comparando cliente × STEP', detail: 'Extraindo requisitos, compromissos e inconsistências.' };
@@ -75,7 +88,6 @@
     wrapper.querySelector('#auditProgressDetail').textContent = progress.detail;
     fill.style.width = `${percent}%`;
     track.setAttribute('aria-valuenow', String(percent));
-    wrapper.style.setProperty('--progress', `${percent}%`);
   }
 
   function tick() {
