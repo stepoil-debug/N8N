@@ -135,9 +135,27 @@ jobs:
           LLM_API_KEY: ${{ github.token }}
         run: python scripts/execute_audit_cli.py
 
+      - name: Refresh OIDC token for publishing
+        if: steps.claim.outputs.has_job == 'true' && success()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const token = await core.getIDToken('step-audit-worker');
+            core.setSecret(token);
+            core.exportVariable('WORKER_OIDC_TOKEN', token);
+
       - name: Publish reports and corrected proposal
-        if: steps.claim.outputs.has_job == 'true'
+        if: steps.claim.outputs.has_job == 'true' && success()
         run: python scripts/queue_worker.py publish
+
+      - name: Refresh OIDC token for failure reporting
+        if: failure() && steps.claim.outputs.has_job == 'true'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const token = await core.getIDToken('step-audit-worker');
+            core.setSecret(token);
+            core.exportVariable('WORKER_OIDC_TOKEN', token);
 
       - name: Mark job as failed
         if: failure() && steps.claim.outputs.has_job == 'true'
