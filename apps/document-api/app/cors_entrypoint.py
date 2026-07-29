@@ -13,6 +13,7 @@ from .package_service import analyze_package
 from .proposal_revision import revise_original_proposal
 from . import ai_batch_service  # noqa: F401  # registra rotas /v1/ai/*
 from . import ai_resilience  # noqa: F401  # aplica retries, rate limit e contingência
+from . import drawing_artifact_extension  # noqa: F401  # preserva evidências visuais nos artefatos
 
 
 def allowed_origins() -> list[str]:
@@ -40,6 +41,7 @@ def system_status() -> dict:
     return {
         "status": "ready" if webhook else "configuration_required",
         "document_api": True,
+        "drawing_vision": True,
         "n8n_webhook_configured": bool(webhook),
         "message": "Motor de auditoria disponível." if webhook else "O webhook do n8n ainda não foi configurado no servidor.",
     }
