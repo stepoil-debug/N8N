@@ -9,6 +9,7 @@ on:
     paths:
       - '.github/workflows/process-audit.yml'
       - 'scripts/queue_worker.py'
+      - 'scripts/execute_audit_cli.py'
       - 'workflows/parts/**'
       - 'apps/document-api/**'
 
@@ -30,6 +31,8 @@ jobs:
       STEP_AUDIT_JOB_FILE: /tmp/step-audit-job.json
       STEP_AUDIT_RESULT_FILE: /tmp/step-audit-result.json
       STEP_AUDIT_INPUT_FILE: /tmp/step-audit-input.zip
+      STEP_AUDIT_PAYLOAD_PATH: /tmp/step-audit-n8n-input.json
+      STEP_AUDIT_WORKFLOW_ID: STEP_AUDIT_FULL_01
       DOCUMENT_API_PUBLIC_URL: http://127.0.0.1:8000
       DOCUMENT_API_URL: http://127.0.0.1:8000
       DOCUMENT_API_KEY: step-audit-actions
@@ -39,19 +42,14 @@ jobs:
       MAX_PACKAGE_MB: '250'
       MAX_ZIP_ENTRIES: '2500'
       MAX_ZIP_UNCOMPRESSED_MB: '1500'
-      N8N_AUDIT_WEBHOOK_URL: http://127.0.0.1:5678/webhook/step-audit
-      N8N_AUDIT_WEBHOOK_TOKEN: step-audit-internal-actions
       N8N_ENCRYPTION_KEY: step-audit-ephemeral-actions-key-2026
       N8N_BLOCK_ENV_ACCESS_IN_NODE: 'false'
+      NODE_FUNCTION_ALLOW_BUILTIN: fs
       N8N_DIAGNOSTICS_ENABLED: 'false'
       N8N_PERSONALIZATION_ENABLED: 'false'
       N8N_VERSION_NOTIFICATIONS_ENABLED: 'false'
       N8N_ENFORCE_SETTINGS_FILE_PERMISSIONS: 'false'
       N8N_LOG_LEVEL: warn
-      N8N_HOST: 127.0.0.1
-      N8N_PORT: '5678'
-      N8N_PROTOCOL: http
-      WEBHOOK_URL: http://127.0.0.1:5678/
       LLM_BASE_URL: https://models.github.ai/inference/chat/completions
       LLM_MODEL: openai/gpt-4.1-mini
 
@@ -105,41 +103,36 @@ jobs:
         if: steps.claim.outputs.has_job == 'true'
         run: npm install --global n8n@2.30.5
 
-      - name: Reconstruct, import and publish audit workflow
+      - name: Reconstruct and import audit workflow
         if: steps.claim.outputs.has_job == 'true'
         run: |
           cat workflows/parts/workflow-*.b64 > /tmp/audit-workflow.b64
           base64 --decode /tmp/audit-workflow.b64 | gzip -d > /tmp/audit-workflow.json
           python -m json.tool /tmp/audit-workflow.json >/dev/null
           n8n import:workflow --input=/tmp/audit-workflow.json
-          n8n publish:workflow --id=STEP_AUDIT_FULL_01
 
-      - name: Start document API and n8n
+      - name: Start document API
         if: steps.claim.outputs.has_job == 'true'
         env:
           LLM_API_KEY: ${{ github.token }}
           PYTHONPATH: apps/document-api
         run: |
           python -m uvicorn app.cors_entrypoint:app --host 127.0.0.1 --port 8000 > /tmp/document-api.log 2>&1 &
-          n8n start > /tmp/n8n.log 2>&1 &
           for attempt in $(seq 1 90); do
-            if curl --fail --silent http://127.0.0.1:8000/health >/dev/null \
-              && curl --fail --silent http://127.0.0.1:5678/healthz >/dev/null; then
+            if curl --fail --silent http://127.0.0.1:8000/health >/dev/null; then
               exit 0
             fi
             sleep 2
           done
           echo 'Document API log:'
           cat /tmp/document-api.log || true
-          echo 'n8n log:'
-          cat /tmp/n8n.log || true
           exit 1
 
-      - name: Execute complete proposal audit
+      - name: Execute complete proposal audit through n8n CLI
         if: steps.claim.outputs.has_job == 'true'
         env:
           LLM_API_KEY: ${{ github.token }}
-        run: python scripts/queue_worker.py process
+        run: python scripts/execute_audit_cli.py
 
       - name: Publish reports and corrected proposal
         if: steps.claim.outputs.has_job == 'true'
@@ -152,5 +145,5 @@ jobs:
       - name: Clean temporary documents
         if: always()
         run: |
-          rm -f /tmp/step-audit-input.zip /tmp/step-audit-job.json /tmp/step-audit-result.json
+          rm -f /tmp/step-audit-input.zip /tmp/step-audit-job.json /tmp/step-audit-result.json /tmp/step-audit-n8n-input.json
           rm -rf /tmp/step-audit-artifacts
