@@ -12,6 +12,7 @@ from .main import app, artifact, auth
 from .package_service import analyze_package
 from .proposal_revision import revise_original_proposal
 from . import ai_batch_service  # noqa: F401  # registra rotas /v1/ai/*
+from . import ai_resilience  # noqa: F401  # aplica retries, rate limit e contingência
 
 
 def allowed_origins() -> list[str]:
