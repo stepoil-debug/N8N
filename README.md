@@ -11,9 +11,34 @@ Projeto isolado para automatizar a triagem de RFQs e a validação adversarial d
 - Bloqueio do relatório quando houver requisito aplicável sem cobertura.
 - Workflows importáveis no n8n.
 - Migration Supabase para oportunidades, documentos, requisitos, compromissos, execuções, achados e artefatos.
+- Painel web responsivo na pasta `site/`.
+- Deploy automático do painel pelo GitHub Pages.
 - Testes e CI.
 
-## Início rápido
+## Painel web
+
+O frontend é publicado pelo workflow `.github/workflows/deploy-pages.yml` sempre que houver alteração na pasta `site/`.
+
+URL esperada:
+
+```text
+https://stepoil-debug.github.io/N8N/
+```
+
+O painel permite:
+
+- Cadastrar uma oportunidade.
+- Separar documentos do cliente e documentos da STEP.
+- Testar conexão com a API documental.
+- Extrair arquivos diretamente pela API protegida.
+- Disparar o webhook de produção do n8n.
+- Acompanhar um histórico local sem armazenar documentos no GitHub.
+
+As URLs da API e do webhook ficam no `localStorage` do navegador. O token fica apenas no `sessionStorage` e é apagado quando a aba é fechada.
+
+> O GitHub Pages hospeda somente HTML, CSS e JavaScript. O n8n, a API Python, o PostgreSQL, o Redis e o Supabase precisam permanecer em infraestrutura própria.
+
+## Início rápido do backend
 
 ```bash
 cp .env.example .env
@@ -27,19 +52,21 @@ Acesse `http://localhost:5678`, crie o administrador e importe os JSONs da pasta
 ## Fluxo
 
 ```text
-Upload / e-mail / Supabase Storage
-              ↓
-             n8n
-              ↓
-      extração documental
-              ↓
- triagem RFQ → checklist Excel
-              ↓
- requisitos × proposta STEP
-              ↓
- validações técnicas/comerciais/contratuais
-              ↓
- aprovação humana → PDF + JSON + dashboard
+Painel GitHub Pages
+          ↓
+API documental autenticada
+          ↓
+         n8n
+          ↓
+extração e classificação
+          ↓
+triagem RFQ → checklist Excel
+          ↓
+requisitos × proposta STEP
+          ↓
+validações técnicas/comerciais/contratuais
+          ↓
+aprovação humana → PDF + JSON + dashboard
 ```
 
 Documentos PERENCO e de outros clientes não são versionados neste repositório.
