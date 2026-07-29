@@ -17,6 +17,7 @@ SOURCE = Path(os.environ.get("STEP_AUDIT_WORKFLOW_SOURCE", "workflows/40-auditor
 OUTPUT = Path(os.environ.get("STEP_AUDIT_WORKFLOW_OUTPUT", "/tmp/audit-workflow.json"))
 WORKFLOW_ID = os.environ.get("STEP_AUDIT_WORKFLOW_ID", "STEP_AUDIT_FULL_01")
 PAYLOAD_PATH = os.environ.get("STEP_AUDIT_PAYLOAD_PATH", "/tmp/step-audit-n8n-input.json")
+RESULT_PATH = os.environ.get("STEP_AUDIT_RESULT_FILE", "/tmp/step-audit-result.json")
 
 
 def node_by_name(workflow: dict[str, Any], name: str) -> dict[str, Any]:
@@ -76,6 +77,15 @@ def main() -> int:
         "{ role: 'user', content: $json.auditPrompt }], "
         "stream: false, temperature: 0.1, max_tokens: 16000, "
         "response_format: { type: 'json_object' } } }}"
+    )
+
+    final_node = node_by_name(workflow, "Resposta Completa")
+    final_node["parameters"]["jsCode"] = (
+        "const fs = require('fs');\n"
+        "const result = {...$json, status: 'analysis_completed'};\n"
+        f"const resultPath = $env.STEP_AUDIT_RESULT_FILE || {json.dumps(RESULT_PATH)};\n"
+        "fs.writeFileSync(resultPath, JSON.stringify(result), 'utf8');\n"
+        "return [{json: result}];"
     )
 
     OUTPUT.parent.mkdir(parents=True, exist_ok=True)
