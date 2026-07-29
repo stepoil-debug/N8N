@@ -4,12 +4,13 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <meta name="theme-color" content="#0b2447">
-  <meta name="description" content="Painel de auditoria industrial STEP com upload único em ZIP.">
+  <meta name="description" content="Auditoria industrial STEP: comparação automática de RFQ e proposta com geração de proposta revisada.">
   <title>STEP Audit One</title>
   <link rel="icon" href="favicon.svg" type="image/svg+xml">
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="stylesheet" href="styles.css">
   <link rel="stylesheet" href="zip.css">
+  <link rel="stylesheet" href="results.css">
 </head>
 <body>
   <div class="app-shell">
@@ -18,12 +19,13 @@
       <nav class="nav" aria-label="Navegação principal">
         <button class="nav-item active" data-view="dashboard"><span>⌂</span> Visão geral</button>
         <button class="nav-item" data-view="new-audit"><span>＋</span> Nova auditoria</button>
+        <button class="nav-item" data-view="results"><span>✓</span> Resultado</button>
         <button class="nav-item" data-view="history"><span>◷</span> Histórico</button>
         <button class="nav-item" data-view="architecture"><span>⌘</span> Arquitetura</button>
       </nav>
       <div class="sidebar-footer">
-        <div class="connection-card"><div class="status-row"><span class="status-dot online"></span><strong>Upload único</strong></div><small>O classificador separa automaticamente todos os documentos do ZIP.</small></div>
-        <small class="version">STEP Audit One · v1.1</small>
+        <div class="connection-card"><div class="status-row"><span class="status-dot" id="engineDot"></span><strong id="engineStatus">Verificando motor</strong></div><small id="engineDetail">Análise documental, n8n e IA local.</small></div>
+        <small class="version">STEP Audit One · v1.2</small>
       </div>
     </aside>
 
@@ -37,51 +39,51 @@
       <section class="view active" id="view-dashboard">
         <div class="hero">
           <div>
-            <span class="pill">Pacote único da oportunidade</span>
-            <h2>Envie um ZIP completo. O agente organiza RFQ, proposta, orçamento, e-mails e anexos.</h2>
-            <p>A estrutura original das pastas é preservada como evidência e cada arquivo recebe uma classificação automática antes da auditoria.</p>
-            <div class="hero-actions"><button class="button primary" data-go="new-audit">Enviar oportunidade</button><button class="button ghost" data-go="architecture">Ver arquitetura</button></div>
+            <span class="pill">Auditoria completa de propostas</span>
+            <h2>Compare os documentos do cliente com a proposta STEP e gere uma versão revisada.</h2>
+            <p>O agente extrai requisitos, compromissos, inconsistências, riscos e correções. Ao final, entrega relatório, planilha e proposta corrigida em DOCX e PDF.</p>
+            <div class="hero-actions"><button class="button primary" data-go="new-audit">Executar auditoria</button><button class="button ghost" data-go="architecture">Ver arquitetura</button></div>
           </div>
-          <div class="hero-orbit" aria-hidden="true"><div class="orbit-core">ZIP</div><span class="orbit-node n1">RFQ</span><span class="orbit-node n2">MSG</span><span class="orbit-node n3">XLSM</span><span class="orbit-node n4">PDF</span></div>
+          <div class="hero-orbit" aria-hidden="true"><div class="orbit-core">AI</div><span class="orbit-node n1">RFQ</span><span class="orbit-node n2">STEP</span><span class="orbit-node n3">RISCOS</span><span class="orbit-node n4">DOCX</span></div>
         </div>
         <div class="metrics-grid">
-          <article class="metric"><span>Oportunidades locais</span><strong id="metricAudits">0</strong><small>Metadados salvos neste navegador</small></article>
-          <article class="metric"><span>Arquivos inventariados</span><strong id="metricDocuments">0</strong><small>Conteúdo encontrado nos ZIPs</small></article>
-          <article class="metric"><span>Bloqueios identificados</span><strong id="metricBlocks">0</strong><small>Achados críticos registrados</small></article>
-          <article class="metric"><span>Status do classificador</span><strong id="metricPlatform">Pronto</strong><small>Separação automática no upload</small></article>
+          <article class="metric"><span>Auditorias</span><strong id="metricAudits">0</strong><small>Execuções registradas neste navegador</small></article>
+          <article class="metric"><span>Documentos analisados</span><strong id="metricDocuments">0</strong><small>Cliente + STEP</small></article>
+          <article class="metric"><span>Bloqueios identificados</span><strong id="metricBlocks">0</strong><small>Riscos críticos</small></article>
+          <article class="metric"><span>Motor de IA</span><strong id="metricPlatform">Verificando</strong><small>n8n + modelo local</small></article>
         </div>
         <div class="content-grid">
           <article class="panel">
-            <div class="panel-head"><div><p class="eyebrow">Pipeline</p><h3>Fluxo da auditoria</h3></div><span class="badge">8 etapas</span></div>
+            <div class="panel-head"><div><p class="eyebrow">Pipeline</p><h3>Fluxo completo</h3></div><span class="badge">8 etapas</span></div>
             <ol class="pipeline">
-              <li><span>1</span><div><strong>Receber um ZIP</strong><small>Pacote completo da oportunidade.</small></div></li>
-              <li><span>2</span><div><strong>Inventariar</strong><small>Pastas, arquivos, tamanhos e formatos.</small></div></li>
-              <li><span>3</span><div><strong>Classificar fontes</strong><small>Cliente, STEP, RFQ, proposta, orçamento e demais grupos.</small></div></li>
-              <li><span>4</span><div><strong>Extrair conteúdo</strong><small>PDF, Office, MSG/EML e OCR.</small></div></li>
-              <li><span>5</span><div><strong>Comparar aderência</strong><small>Requisitos do cliente × compromissos STEP.</small></div></li>
-              <li><span>6</span><div><strong>Validar regras</strong><small>Cálculos e verificações determinísticas.</small></div></li>
-              <li><span>7</span><div><strong>Aprovação humana</strong><small>Bloqueio de submissão quando necessário.</small></div></li>
-              <li><span>8</span><div><strong>Gerar relatório</strong><small>PDF, JSON, checklist e dashboard.</small></div></li>
+              <li><span>1</span><div><strong>Receber o ZIP</strong><small>Pacote completo da oportunidade.</small></div></li>
+              <li><span>2</span><div><strong>Extrair documentos</strong><small>PDF, Word, Excel, MSG/EML e OCR.</small></div></li>
+              <li><span>3</span><div><strong>Separar fontes</strong><small>Cliente, STEP e itens não classificados.</small></div></li>
+              <li><span>4</span><div><strong>Extrair requisitos e compromissos</strong><small>Escopo, prazo, preço, normas e condições.</small></div></li>
+              <li><span>5</span><div><strong>Comparar aderência</strong><small>Atendido, parcial, não atendido ou não verificável.</small></div></li>
+              <li><span>6</span><div><strong>Apontar correções</strong><small>Texto recomendado e impacto de cada inconsistência.</small></div></li>
+              <li><span>7</span><div><strong>Reescrever a proposta</strong><small>Modelo revisado com ressalvas e validações humanas.</small></div></li>
+              <li><span>8</span><div><strong>Entregar artefatos</strong><small>PDF, DOCX, XLSX e JSON.</small></div></li>
             </ol>
           </article>
-          <article class="panel"><div class="panel-head"><div><p class="eyebrow">Atividade</p><h3>Últimas auditorias</h3></div><button class="text-button" data-go="history">Ver todas</button></div><div id="recentAudits" class="empty-state"><div class="empty-icon">◎</div><strong>Nenhuma auditoria registrada</strong><p>Envie um ZIP para começar.</p></div></article>
+          <article class="panel"><div class="panel-head"><div><p class="eyebrow">Atividade</p><h3>Últimas auditorias</h3></div><button class="text-button" data-go="history">Ver todas</button></div><div id="recentAudits" class="empty-state"><div class="empty-icon">◎</div><strong>Nenhuma auditoria concluída</strong><p>Envie um ZIP para começar.</p></div></article>
         </div>
       </section>
 
       <section class="view" id="view-new-audit">
-        <div class="section-intro"><div><p class="eyebrow">Nova oportunidade</p><h2>Enviar pacote completo</h2><p>Não separe os documentos. Coloque tudo dentro de um único ZIP, mantendo as pastas existentes.</p></div><span class="secure-note">🔒 O ZIP não é gravado no GitHub</span></div>
+        <div class="section-intro"><div><p class="eyebrow">Nova oportunidade</p><h2>Auditar pacote completo</h2><p>Inclua no ZIP os documentos do cliente e os arquivos da proposta STEP. O agente fará a separação e a comparação.</p></div><span class="secure-note">🔒 O ZIP não é armazenado no GitHub</span></div>
         <form id="auditForm" class="audit-layout">
           <article class="panel form-panel">
-            <div class="step-title"><span>1</span><div><h3>Pacote da oportunidade</h3><p>Selecione somente um arquivo no formato ZIP.</p></div></div>
+            <div class="step-title"><span>1</span><div><h3>Pacote da oportunidade</h3><p>Selecione um único arquivo ZIP.</p></div></div>
             <label class="dropzone zip-dropzone" id="packageDropzone"><input type="file" id="packageFile" accept=".zip,application/zip"><span class="drop-icon">⇧</span><strong>Arraste o ZIP completo ou clique para selecionar</strong><small>RFQ, e-mails, desenhos, orçamento, materiais, proposta e PO · até 250 MB</small></label>
             <div class="file-list" id="packageFileList"></div>
           </article>
           <article class="panel form-panel" id="inventoryPanel" hidden>
-            <div class="step-title"><span>2</span><div><h3>Inventário automático</h3><p>O pacote foi aberto localmente e os arquivos foram separados por função.</p></div></div>
+            <div class="step-title"><span>2</span><div><h3>Inventário automático</h3><p>Prévia local da separação. A leitura integral será executada no servidor.</p></div></div>
             <div class="zip-summary" id="zipSummary"></div><div class="inventory-scroll" id="inventoryTable"></div><div class="notice" id="ignoredNotice" hidden></div>
           </article>
           <article class="panel form-panel">
-            <div class="step-title"><span>3</span><div><h3>Identificação</h3><p>Os campos são preenchidos automaticamente pelo nome e pelas pastas do ZIP.</p></div></div>
+            <div class="step-title"><span>3</span><div><h3>Identificação</h3><p>Revise os campos detectados automaticamente.</p></div></div>
             <div class="form-grid">
               <label><span>Código da oportunidade *</span><input id="opportunityId" name="opportunityId" required placeholder="Ex.: BEP-26-762"></label>
               <label><span>Cliente *</span><input id="clientName" name="clientName" required placeholder="Ex.: PERENCO"></label>
@@ -90,7 +92,7 @@
             </div>
           </article>
           <article class="panel form-panel">
-            <div class="step-title"><span>4</span><div><h3>Frentes da auditoria</h3><p>Selecione os agentes que devem avaliar o pacote.</p></div></div>
+            <div class="step-title"><span>4</span><div><h3>Frentes da auditoria</h3><p>As quatro frentes são recomendadas para a revisão completa.</p></div></div>
             <div class="checks-grid">
               <label class="check-card"><input type="checkbox" name="agents" value="technical" checked><span><strong>Técnica</strong><small>Escopo, materiais, normas, desenhos e testes.</small></span></label>
               <label class="check-card"><input type="checkbox" name="agents" value="commercial" checked><span><strong>Comercial</strong><small>Preço, moeda, quantidades, impostos e pagamento.</small></span></label>
@@ -98,16 +100,33 @@
               <label class="check-card"><input type="checkbox" name="agents" value="coverage" checked><span><strong>Cobertura</strong><small>Evidências, lacunas e itens não verificáveis.</small></span></label>
             </div>
           </article>
-          <div class="submit-bar"><div><strong id="fileCounter">Nenhum ZIP selecionado</strong><small>O agente fará a separação automaticamente.</small></div><button type="button" class="button secondary" id="saveDraft">Salvar rascunho</button><button type="submit" class="button primary large" id="runAudit">Classificar e executar</button></div>
+          <div class="submit-bar"><div><strong id="fileCounter">Nenhum ZIP selecionado</strong><small>A execução pode levar alguns minutos.</small></div><button type="button" class="button secondary" id="saveDraft">Salvar rascunho</button><button type="submit" class="button primary large" id="runAudit">Executar auditoria completa</button></div>
         </form>
+      </section>
+
+      <section class="view" id="view-results">
+        <div id="resultEmpty" class="panel empty-state"><div class="empty-icon">✓</div><strong>Nenhum resultado carregado</strong><p>Conclua uma auditoria ou abra uma execução pelo histórico.</p></div>
+        <div id="resultContent" hidden>
+          <div class="section-intro"><div><p class="eyebrow">Auditoria concluída</p><h2 id="resultTitle">Resultado</h2><p id="resultSubtitle"></p></div><span class="decision-badge" id="decisionBadge">—</span></div>
+          <div class="result-metrics">
+            <article><span>Aderência</span><strong id="resultAdherence">—</strong></article>
+            <article><span>Cobertura</span><strong id="resultCoverage">—</strong></article>
+            <article><span>Achados</span><strong id="resultFindings">0</strong></article>
+            <article><span>Bloqueios</span><strong id="resultBlockers">0</strong></article>
+          </div>
+          <article class="panel result-opinion"><p class="eyebrow">Parecer executivo</p><h3 id="resultOpinionTitle">Revisão necessária</h3><p id="resultOpinion"></p></article>
+          <article class="panel"><div class="panel-head"><div><p class="eyebrow">Entregáveis</p><h3>Arquivos gerados</h3></div></div><div class="artifact-grid" id="artifactGrid"></div></article>
+          <article class="panel"><div class="panel-head"><div><p class="eyebrow">Inconsistências</p><h3>Achados priorizados</h3></div></div><div class="inventory-scroll" id="findingsTable"></div></article>
+          <article class="panel"><div class="panel-head"><div><p class="eyebrow">Plano de ação</p><h3>Correções a aplicar</h3></div></div><div class="correction-list" id="correctionsList"></div></article>
+        </div>
       </section>
 
       <section class="view" id="view-history"><div class="section-intro"><div><p class="eyebrow">Rastreabilidade</p><h2>Histórico local</h2><p>Somente metadados e resultados resumidos são mantidos neste navegador.</p></div><button class="button ghost" id="clearHistory">Limpar histórico</button></div><div class="panel"><div id="historyTable" class="empty-state"><div class="empty-icon">◷</div><strong>Histórico vazio</strong><p>As oportunidades executadas aparecerão aqui.</p></div></div></section>
 
       <section class="view" id="view-architecture">
-        <div class="section-intro"><div><p class="eyebrow">Arquitetura</p><h2>Como a plataforma funciona</h2><p>O usuário envia apenas um ZIP. Toda separação técnica ocorre automaticamente.</p></div></div>
-        <div class="architecture-flow"><article><span>01</span><strong>ZIP único</strong><small>Pacote completo da oportunidade.</small></article><i>→</i><article><span>02</span><strong>Classificador</strong><small>Pastas, nomes, formatos e conteúdo.</small></article><i>→</i><article><span>03</span><strong>Agentes n8n</strong><small>Técnico, comercial, contratual e cobertura.</small></article><i>→</i><article><span>04</span><strong>Validação</strong><small>Regras objetivas e aprovação humana.</small></article><i>→</i><article><span>05</span><strong>Relatórios</strong><small>Checklist, PDF, JSON e dashboard.</small></article></div>
-        <div class="notice"><strong>Classificação preservada:</strong> o caminho original de cada arquivo dentro do ZIP é mantido como referência de evidência.</div>
+        <div class="section-intro"><div><p class="eyebrow">Arquitetura</p><h2>Como a auditoria funciona</h2><p>O GitHub Pages exibe o painel. O processamento pesado ocorre no n8n, na API documental e no modelo local Ollama.</p></div></div>
+        <div class="architecture-flow"><article><span>01</span><strong>ZIP único</strong><small>Pacote completo da oportunidade.</small></article><i>→</i><article><span>02</span><strong>Extração</strong><small>PDF, Office, e-mail e OCR.</small></article><i>→</i><article><span>03</span><strong>IA local</strong><small>Requisitos, compromissos e comparação.</small></article><i>→</i><article><span>04</span><strong>Correções</strong><small>Achados, riscos e novo texto.</small></article><i>→</i><article><span>05</span><strong>Proposta revisada</strong><small>DOCX, PDF, XLSX e JSON.</small></article></div>
+        <div class="notice warning"><strong>Regra de segurança:</strong> preço, prazo ou obrigação sem evidência suficiente são marcados para validação humana, nunca alterados silenciosamente.</div>
       </section>
     </main>
   </div>
