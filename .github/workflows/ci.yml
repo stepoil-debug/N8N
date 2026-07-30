@@ -15,8 +15,24 @@ jobs:
           python-version: "3.12"
           cache: pip
           cache-dependency-path: apps/document-api/requirements.txt
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
       - run: pip install -r apps/document-api/requirements.txt
-      - run: python -m compileall -q apps/document-api/app
+      - run: python -m compileall -q apps/document-api/app scripts/process_queued_job.py scripts/queue_worker.py
       - run: pytest -q apps/document-api/tests
       - run: for file in workflows/*.json; do python -m json.tool "$file" >/dev/null; done
+      - run: |
+          node --check site/config.js
+          node --check site/app.js
+          node --check site/progress.js
+          node --check site/drawings.js
+          node --check site/drawing-profile-scope.js
+      - run: |
+          test -f site/drawings.css
+          grep -q "view-drawing-analysis" site/index.html
+          grep -q "client-profile:" site/drawings.js
+          grep -q "analysisType: 'drawing'" site/drawings.js
+          grep -q "hi39520" site/drawing-profile-scope.js
+          grep -q "scripts/process_queued_job.py" .github/workflows/process-audit.yml
       - run: docker compose --env-file .env.example config >/dev/null
