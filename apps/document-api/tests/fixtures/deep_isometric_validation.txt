@@ -1,0 +1,1 @@
+Synthetic validation marker for deep piping-isometric audit mode. No client data.
