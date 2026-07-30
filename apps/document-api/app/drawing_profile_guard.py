@@ -17,29 +17,34 @@ def _fold(value: Any) -> str:
     return "".join(char for char in text if not unicodedata.combining(char)).casefold()
 
 
-def _identity_terms(profile: dict[str, Any]) -> list[str]:
+def _identity_groups(profile: dict[str, Any]) -> tuple[list[str], list[str]]:
     identity = profile.get("identity") if isinstance(profile.get("identity"), dict) else {}
-    values = [
-        identity.get("engineering_client"),
-        identity.get("operator_client"),
-        identity.get("project"),
-        identity.get("project_code"),
-        *(identity.get("aliases") or []),
-    ]
-    terms: set[str] = set()
-    for value in values:
+    client_terms: set[str] = set()
+    project_terms: set[str] = set()
+
+    for value in (identity.get("engineering_client"), identity.get("operator_client")):
         normalized = _fold(value).strip()
-        if len(normalized) >= 4:
-            terms.add(normalized)
-        for piece in normalized.replace("/", " ").replace("—", " ").replace("-", " ").split():
-            if len(piece) >= 4 and piece not in {"offshore", "project", "piping", "petrobras", "single"}:
-                terms.add(piece)
-    # Petrobras and SBM are meaningful client identifiers even though one is broad.
-    if "petrobras" in _fold(values):
-        terms.add("petrobras")
-    if "sbm" in _fold(values):
-        terms.add("sbm")
-    return sorted(terms, key=len, reverse=True)
+        if normalized:
+            client_terms.add(normalized)
+    for alias in identity.get("aliases") or []:
+        normalized = _fold(alias).strip()
+        if not normalized:
+            continue
+        if any(token in normalized for token in ("fps", "hi", "project", "cidade", "ilha")):
+            project_terms.add(normalized)
+        elif normalized not in {"petrobras", "offshore"}:
+            client_terms.add(normalized)
+
+    project = _fold(identity.get("project")).strip()
+    project_code = _fold(identity.get("project_code")).strip()
+    if project:
+        project_terms.add(project)
+        simplified = project.replace("fpsо", "").replace("fpso", "").strip()
+        if simplified:
+            project_terms.add(simplified)
+    if project_code:
+        project_terms.add(project_code)
+    return sorted(client_terms, key=len, reverse=True), sorted(project_terms, key=len, reverse=True)
 
 
 def guarded_client_context(
@@ -64,14 +69,19 @@ def guarded_client_context(
                 ]
             )
         )
-        terms = _identity_terms(profile)
-        if not any(term in evidence_text for term in terms):
+        client_terms, project_terms = _identity_groups(profile)
+        client_match = not client_terms or any(term in evidence_text for term in client_terms)
+        project_match = not project_terms or any(term in evidence_text for term in project_terms)
+        # A project-specific profile requires project evidence. A generic operator name,
+        # such as Petrobras, can never authorize rules from another FPSO by itself.
+        if not client_match or not project_match:
             identity = profile.get("identity") or {}
             raise HTTPException(
                 status_code=422,
                 detail=(
-                    f"O perfil {profile_id} pertence a {identity.get('engineering_client') or identity.get('project')}. "
-                    "Cliente, projeto e documentos enviados não confirmam essa identidade; a regra não será aplicada."
+                    f"O perfil {profile_id} pertence a {identity.get('engineering_client') or 'cliente específico'} / "
+                    f"{identity.get('project') or identity.get('project_code') or 'projeto específico'}. "
+                    "Cliente e projeto dos documentos enviados não confirmam essa identidade; a regra não será aplicada."
                 ),
             )
     return _ORIGINAL_CLIENT_CONTEXT(
