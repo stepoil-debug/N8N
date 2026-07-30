@@ -43,6 +43,7 @@ jobs:
           test -f site/app.js
           test -f site/progress.js
           test -f site/drawings.js
+          test -f site/drawing-profile-scope.js
           grep -q "queueBaseUrl" site/config.js
           grep -q "step-audit-queue" site/config.js
           grep -q "uploadToSignedUrl" site/app.js
@@ -53,6 +54,7 @@ jobs:
           grep -q "view-drawing-analysis" site/index.html
           grep -q "client-profile:" site/drawings.js
           grep -q "analysisType: 'drawing'" site/drawings.js
+          grep -q "hi39520" site/drawing-profile-scope.js
           if grep -q "app-parts/" site/app.js; then
             echo "O frontend ainda depende de blocos fragmentados."
             exit 1
@@ -61,6 +63,7 @@ jobs:
           node --check site/app.js
           node --check site/progress.js
           node --check site/drawings.js
+          node --check site/drawing-profile-scope.js
 
       - name: Prepare versioned Pages artifact
         shell: bash
@@ -89,7 +92,12 @@ jobs:
                   '<script src="app.js" defer></script>',
                   '<script src="app.js" defer></script>\n  <script src="progress.js" defer></script>',
               )
-          for filename in ('styles.css', 'zip.css', 'results.css', 'drawings.css', 'config.js', 'app.js', 'progress.js', 'drawings.js'):
+          if 'src="drawing-profile-scope.js"' not in text:
+              text = text.replace(
+                  '<script src="drawings.js" defer></script>',
+                  '<script src="drawings.js" defer></script>\n  <script src="drawing-profile-scope.js" defer></script>',
+              )
+          for filename in ('styles.css', 'zip.css', 'results.css', 'drawings.css', 'config.js', 'app.js', 'progress.js', 'drawings.js', 'drawing-profile-scope.js'):
               text = re.sub(
                   rf'{re.escape(filename)}(?:\?v=[^"\']+)?',
                   f'{filename}?v={asset}',
@@ -115,6 +123,7 @@ jobs:
               'progress_mode': 'status_and_pipeline_stage',
               'drawing_mode': 'client_isolated_visual_audit',
               'client_conditionals': 'per_client_and_per_execution',
+              'project_profile_guard': True,
               'queue': 'supabase_private',
               'orchestrator': 'n8n_and_specialized_drawing_worker',
               'model_provider': 'github_models',
@@ -127,11 +136,14 @@ jobs:
           node --check /tmp/step-audit-pages/app.js
           node --check /tmp/step-audit-pages/progress.js
           node --check /tmp/step-audit-pages/drawings.js
+          node --check /tmp/step-audit-pages/drawing-profile-scope.js
           grep -q "STEP Audit One · v1.6." /tmp/step-audit-pages/index.html
           grep -q "app.js?v=${GITHUB_SHA}" /tmp/step-audit-pages/index.html
           grep -q "progress.js?v=${GITHUB_SHA}" /tmp/step-audit-pages/index.html
           grep -q "drawings.js?v=${GITHUB_SHA}" /tmp/step-audit-pages/index.html
+          grep -q "drawing-profile-scope.js?v=${GITHUB_SHA}" /tmp/step-audit-pages/index.html
           grep -q '"drawing_mode": "client_isolated_visual_audit"' /tmp/step-audit-pages/build.json
+          grep -q '"project_profile_guard": true' /tmp/step-audit-pages/build.json
 
       - name: Upload site artifact
         uses: actions/upload-pages-artifact@v4
