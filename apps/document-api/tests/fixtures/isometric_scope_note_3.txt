@@ -1,0 +1,1 @@
+Synthetic fixture only. Validate material-versus-standard scope and withdrawn-reference checks for piping isometrics.
