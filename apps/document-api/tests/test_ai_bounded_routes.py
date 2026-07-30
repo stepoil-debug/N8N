@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+import os
 import sys
 from pathlib import Path
 
+os.environ["ARTIFACT_ROOT"] = "/tmp/step-industrial-audit-bounded-tests"
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from app import ai_bounded_routes as bounded
