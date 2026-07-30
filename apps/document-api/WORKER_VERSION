@@ -1,0 +1,4 @@
+STEP Audit worker
+version=2026.07.30.3
+commit=b19e92384d5cb845bc3c08b2c1cde46701710190
+features=bounded-ai,docx-custom-styles,artifact-fallback
