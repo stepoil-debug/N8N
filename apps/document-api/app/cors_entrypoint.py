@@ -16,6 +16,7 @@ from . import ai_resilience  # noqa: F401  # aplica retries, rate limit e contin
 from . import isometric_extension  # noqa: F401  # ativa auditoria profunda de isométricos
 from . import drawing_artifact_extension  # noqa: F401  # preserva evidências visuais nos artefatos
 from . import drawing_audit_service  # noqa: F401  # registra análise isolada de desenhos por cliente
+from . import drawing_profile_guard  # noqa: F401  # impede regras permanentes em cliente incompatível
 
 
 def allowed_origins() -> list[str]:
