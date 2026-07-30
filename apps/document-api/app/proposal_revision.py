@@ -40,6 +40,17 @@ def _all_paragraphs(document: Document):
                     yield paragraph
 
 
+def _bullet_paragraph(document: Any) -> Any:
+    """Create a bullet paragraph without assuming the source DOCX has built-in styles."""
+    try:
+        return document.add_paragraph(style="List Bullet")
+    except (KeyError, ValueError):
+        paragraph = document.add_paragraph()
+        paragraph.paragraph_format.left_indent = None
+        paragraph.add_run("• ")
+        return paragraph
+
+
 def revise_original_proposal(opportunity: dict[str, Any], analysis: dict[str, Any]) -> Path | None:
     oid = _text(opportunity.get("opportunity_id")) or "opportunity"
     root = workspace(oid)
@@ -75,14 +86,14 @@ def revise_original_proposal(opportunity: dict[str, Any], analysis: dict[str, An
     if applied:
         document.add_heading("Correções aplicadas diretamente", level=2)
         for item in applied:
-            paragraph = document.add_paragraph(style="List Bullet")
+            paragraph = _bullet_paragraph(document)
             paragraph.add_run(f"{_text(item.get('section'))}: ").bold = True
             paragraph.add_run(_text(item.get("corrected_text")))
 
     if pending:
         document.add_heading("Correções incluídas para validação", level=2)
         for item in pending:
-            paragraph = document.add_paragraph(style="List Bullet")
+            paragraph = _bullet_paragraph(document)
             paragraph.add_run(f"{_text(item.get('section'))}: ").bold = True
             paragraph.add_run(_text(item.get("corrected_text") or item.get("reason")))
             if item.get("requires_human_validation"):
