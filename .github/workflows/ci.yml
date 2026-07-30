@@ -19,9 +19,20 @@ jobs:
         with:
           node-version: "22"
       - run: pip install -r apps/document-api/requirements.txt
-      - run: python -m compileall -q apps/document-api/app scripts/process_queued_job.py scripts/queue_worker.py
+      - run: >-
+          python -m compileall -q
+          apps/document-api/app
+          scripts/process_queued_job.py
+          scripts/queue_worker.py
+          scripts/execute_audit_cli.py
+          scripts/execute_audit_cli_v2.py
+          scripts/build_cli_workflow.py
       - run: pytest -q apps/document-api/tests
       - run: for file in workflows/*.json; do python -m json.tool "$file" >/dev/null; done
+      - run: |
+          STEP_AUDIT_WORKFLOW_OUTPUT=/tmp/ci-audit-workflow.json python scripts/build_cli_workflow.py
+          grep -q "extract-v2" /tmp/ci-audit-workflow.json
+          grep -q "audit-v2" /tmp/ci-audit-workflow.json
       - run: |
           node --check site/config.js
           node --check site/app.js
@@ -35,4 +46,5 @@ jobs:
           grep -q "analysisType: 'drawing'" site/drawings.js
           grep -q "hi39520" site/drawing-profile-scope.js
           grep -q "scripts/process_queued_job.py" .github/workflows/process-audit.yml
+          grep -q "execute_audit_cli_v2.py" scripts/process_queued_job.py
       - run: docker compose --env-file .env.example config >/dev/null

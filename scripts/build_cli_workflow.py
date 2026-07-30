@@ -38,7 +38,7 @@ def configure_local_request(node: dict[str, Any], path: str, body: str) -> None:
             "sendBody": True,
             "specifyBody": "json",
             "jsonBody": body,
-            "options": {"timeout": 1800000},
+            "options": {"timeout": 1200000},
         }
     )
 
@@ -69,12 +69,12 @@ def main() -> int:
 
     configure_local_request(
         node_by_name(workflow, "IA Extrair Requisitos"),
-        "/v1/ai/extract",
+        "/v1/ai/extract-v2",
         "={{ { opportunity: $json.opportunity, package: $json.package } }}",
     )
     configure_local_request(
         node_by_name(workflow, "IA Auditar e Corrigir"),
-        "/v1/ai/audit",
+        "/v1/ai/audit-v2",
         "={{ { opportunity: $json.opportunity, package: $json.package, extraction: $json.extraction } }}",
     )
 
@@ -99,7 +99,13 @@ def main() -> int:
     if missing:
         raise RuntimeError(f"Workflow CLI incompleto: {', '.join(missing)}")
 
-    print(f"Workflow CLI gerado em {OUTPUT} com id {WORKFLOW_ID} e IA em lotes locais")
+    built = json.loads(OUTPUT.read_text(encoding="utf-8"))
+    extract_url = node_by_name(built, "IA Extrair Requisitos").get("parameters", {}).get("url", "")
+    audit_url = node_by_name(built, "IA Auditar e Corrigir").get("parameters", {}).get("url", "")
+    if "extract-v2" not in extract_url or "audit-v2" not in audit_url:
+        raise RuntimeError("Workflow CLI não foi ligado às rotas de IA limitadas")
+
+    print(f"Workflow CLI gerado em {OUTPUT} com id {WORKFLOW_ID} e IA limitada em lotes paralelos")
     return 0
 
 
