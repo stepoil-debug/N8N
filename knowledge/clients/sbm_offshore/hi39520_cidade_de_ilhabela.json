@@ -1,0 +1,278 @@
+{
+  "schema_version": "1.0.0",
+  "profile_id": "sbm-hi39520-cidade-de-ilhabela",
+  "status": "active",
+  "confidentiality": "derived-rules-only",
+  "identity": {
+    "engineering_client": "SBM Offshore / Single Buoy Moorings Inc.",
+    "operator_client": "Petrobras Netherlands B.V.",
+    "project": "FPSO Cidade de Ilhabela",
+    "project_code": "HI39520",
+    "aliases": [
+      "SBM Offshore",
+      "Single Buoy Moorings",
+      "Petrobras Netherlands",
+      "FPSO Cidade de Ilhabela",
+      "Cidade de Ilhabela",
+      "HI39520",
+      "PESDPI"
+    ]
+  },
+  "source_registry": [
+    {
+      "document_id": "HI39520-PESDPITS999122",
+      "revision": "A8",
+      "title": "Topsides Piping Material Classes Specification",
+      "area": "topsides",
+      "status": "approved_for_construction",
+      "effective_date": "2024-07-10"
+    },
+    {
+      "document_id": "HI39520-PESDPIVE999010",
+      "revision": "A6",
+      "title": "Vessel Piping Material Classes Specification",
+      "area": "vessel",
+      "status": "approved_for_construction",
+      "effective_date": "2013-10-10"
+    }
+  ],
+  "resolution_order": [
+    "applicable_law_and_local_legislation",
+    "flag_state_and_classification_rules",
+    "contract_and_client_project_specifications",
+    "project_area_specification",
+    "piping_material_class_sheet",
+    "referenced_vds_mds_eds_and_detail_specifications",
+    "numbered_notes",
+    "generic_industry_standard"
+  ],
+  "governance": {
+    "no_implicit_cross_area_reuse": true,
+    "default_when_scope_is_ambiguous": "not_verifiable",
+    "deviation_requires": [
+      "classification_as_special_piping_item",
+      "identification_on_pid",
+      "documented_engineering_approval"
+    ],
+    "rule_application_policy": [
+      "Never apply a PMC solely from its code; resolve area, governing document revision, service, pressure, temperature, material and classification first.",
+      "When two documents appear contradictory, do not silently choose the less stringent requirement; register the conflict and request the governing contractual hierarchy.",
+      "Project-specific blue-highlighted or revision-controlled modifications override the generic CES base specification for this project.",
+      "A numbered note applies only to the component or class row that references that note, unless the specification explicitly states broader applicability.",
+      "If a VDS, MDS, EDS or referenced detail is missing from the package, requirements dependent on it are not_verifiable."
+    ]
+  },
+  "area_router": [
+    {
+      "rule_id": "SBM-AREA-001",
+      "when": {"area": ["topsides", "turret", "process", "utility_plant"]},
+      "use_document": "HI39520-PESDPITS999122-A8",
+      "action": "Apply the Topsides PMC specification. It does not cover subsea pipelines, risers or cargo offloading hoses."
+    },
+    {
+      "rule_id": "SBM-AREA-002",
+      "when": {"area": ["vessel", "marine", "vessel_conversion"]},
+      "use_document": "HI39520-PESDPIVE999010-A6",
+      "action": "Apply the Vessel PMC specification for marine piping systems."
+    },
+    {
+      "rule_id": "SBM-AREA-003",
+      "when": {"area": ["vessel"], "condition": "required PMC is absent from Vessel specification or is not compatible with applicable ABS Vessel requirements"},
+      "use_document": "HI39520-PESDPITS999122-A8",
+      "action": "Use the Topsides PMC only as an explicitly documented cross-reference/deviation; do not assume automatic acceptance."
+    },
+    {
+      "rule_id": "SBM-AREA-004",
+      "when": {"system_function": ["marine_support", "mixed_marine_and_process"]},
+      "action": "Apply ABS Rules for Building and Classing Steel Vessels. For an isolatable process-only portion, process criteria may start after the isolating valve, not including that valve."
+    }
+  ],
+  "conditional_rules": [
+    {
+      "rule_id": "SBM-GOV-001",
+      "category": "document_control",
+      "when": {"condition": "deviation from a PMC or project specification is proposed"},
+      "then": ["avoid deviation where possible", "treat as special piping item", "identify on P&ID", "obtain engineering approval"],
+      "severity_if_violated": "high"
+    },
+    {
+      "rule_id": "SBM-GOV-002",
+      "category": "standards",
+      "when": {"condition": "a referenced standard edition is not contractually frozen"},
+      "then": ["use the latest issue available at the contractual reference date"],
+      "severity_if_violated": "medium"
+    },
+    {
+      "rule_id": "SBM-PMC-001",
+      "category": "material_class_selection",
+      "when": {"condition": "selecting or validating a PMC"},
+      "then": ["verify fluid or service", "verify pressure and temperature", "verify flow and environment", "verify design life", "verify classification regime", "check risk of mixing dissimilar materials", "confirm P&ID class reference"],
+      "severity_if_violated": "high"
+    },
+    {
+      "rule_id": "SBM-PMC-002",
+      "category": "referenced_documents",
+      "when": {"condition": "a PMC row references VDS, MDS or EDS"},
+      "then": ["load the referenced document", "apply supplemental examination, testing, certification and component requirements", "mark not_verifiable if unavailable"],
+      "severity_if_violated": "high"
+    },
+    {
+      "rule_id": "SBM-MAT-001",
+      "category": "material_substitution",
+      "when": {"condition": "material substitution is proposed due to availability, market or technical reasons"},
+      "then": ["Piping Engineer evaluates substitution", "verify required wall thickness", "obtain approval before acceptance"],
+      "severity_if_violated": "high"
+    },
+    {
+      "rule_id": "SBM-MAT-002",
+      "category": "material_substitution",
+      "when": {"condition": "substitute is not explicitly listed in the accepted substitution table"},
+      "then": ["do not reject automatically", "require specific Piping Engineer approval and technical equivalence evidence"],
+      "severity_if_violated": "high"
+    },
+    {
+      "rule_id": "SBM-NDE-001",
+      "category": "quality",
+      "when": {"component": ["welded_pipe"]},
+      "then": ["require 100 percent radiographic examination unless a later governing project rule explicitly replaces it"],
+      "severity_if_violated": "high"
+    },
+    {
+      "rule_id": "SBM-BRANCH-001",
+      "category": "piping_design",
+      "when": {"condition": "selecting a 90 degree branch connection"},
+      "then": ["use the branch chart referenced by the active PMC"],
+      "severity_if_violated": "high"
+    },
+    {
+      "rule_id": "SBM-BRANCH-002",
+      "category": "piping_design",
+      "when": {"branch_location": ["elbow", "tee", "reducer"]},
+      "then": ["branch connection is prohibited unless COMPANY approval is documented"],
+      "severity_if_violated": "high"
+    },
+    {
+      "rule_id": "SBM-CDR-001",
+      "category": "documentation",
+      "when": {"phase": ["bid", "purchase_order"]},
+      "then": ["Package Engineer determines applicable CDR codes during bid stage", "record applicable CDR codes on the purchase order"],
+      "severity_if_violated": "medium"
+    },
+    {
+      "rule_id": "SBM-ABS-001",
+      "category": "classification",
+      "when": {"area": ["vessel"], "condition": "PMC is Class I or Class II subject to project ABS requirements"},
+      "then": ["verify whether pipes require ABS certification", "verify whether fittings, flanges and valves require design approval", "check component type approval or manufacturer testing evidence"],
+      "severity_if_violated": "high"
+    },
+    {
+      "rule_id": "SBM-VALVE-001",
+      "category": "valves",
+      "when": {"condition": "full-port valve is selected"},
+      "then": ["full port is permitted only when indicated on the P&ID"],
+      "severity_if_violated": "medium"
+    },
+    {
+      "rule_id": "SBM-VALVE-002",
+      "category": "valves",
+      "when": {"component": ["swing_check_valve"]},
+      "then": ["use only when indicated on the P&ID", "verify installation orientation when the class note restricts or permits position"],
+      "severity_if_violated": "high"
+    },
+    {
+      "rule_id": "SBM-JOINT-001",
+      "category": "fabrication",
+      "when": {"component": ["threaded_hydrotest_vent", "threaded_hydrotest_drain"]},
+      "then": ["seal weld after testing", "cross-check the applicable piping detail specification"],
+      "severity_if_violated": "high"
+    },
+    {
+      "rule_id": "SBM-FLANGE-001",
+      "category": "flanges",
+      "when": {"connection": ["fitting_to_fitting"]},
+      "then": ["use RF weld-neck flanges only where explicitly permitted by the active class note"],
+      "severity_if_violated": "medium"
+    },
+    {
+      "rule_id": "SBM-FLANGE-002",
+      "category": "flanges",
+      "when": {"condition": "RF flange mates to FF flange"},
+      "then": ["use flat ring gasket when required by the active note", "verify bolting and flange damage risk"],
+      "severity_if_violated": "high"
+    },
+    {
+      "rule_id": "SBM-GASKET-001",
+      "category": "gaskets",
+      "when": {"condition": "valve lining extends over the flange face"},
+      "then": ["do not add a gasket when the active class note states no gasket is required"],
+      "severity_if_violated": "medium"
+    },
+    {
+      "rule_id": "SBM-CERT-001",
+      "category": "certification",
+      "when": {"condition": "component row references material certification note"},
+      "then": ["require EN 10204 type 3.1 or project-revision equivalent stated in the governing specification"],
+      "severity_if_violated": "high"
+    },
+    {
+      "rule_id": "SBM-SPOOL-001",
+      "category": "coating",
+      "when": {"condition": "PMC note requires post-fabrication treatment"},
+      "then": ["apply galvanizing, internal coating or lining after spool fabrication exactly as stated by the referenced note", "do not generalize the treatment to classes without that note"],
+      "severity_if_violated": "high"
+    }
+  ],
+  "project_specific_checks": [
+    {
+      "check_id": "HI39520-XAREA-001",
+      "title": "Cross-area PMC code used without explicit basis",
+      "trigger": "A Vessel drawing references a PMC code absent from the Vessel PMC but present in the Topsides PMC, or vice versa.",
+      "required_action": "Confirm the intended governing class, service, classification basis and approved deviation/cross-reference.",
+      "default_status": "not_verifiable",
+      "severity": "high"
+    },
+    {
+      "check_id": "HI39520-SERVICE-001",
+      "title": "Service code does not match the active PMC service index",
+      "trigger": "Drawing service code and the service codes allowed or indexed for the active PMC do not reconcile.",
+      "required_action": "Confirm P&ID service, selected class and engineering approval.",
+      "default_status": "candidate_finding",
+      "severity": "high"
+    },
+    {
+      "check_id": "HI39520-REV-001",
+      "title": "Outdated or mixed revision basis",
+      "trigger": "Package mixes superseded and current project specifications without a document hierarchy or approved deviation.",
+      "required_action": "Establish the contractual revision baseline before compliance evaluation.",
+      "default_status": "not_verifiable",
+      "severity": "high"
+    }
+  ],
+  "pmc_profiles": {
+    "topsides:01K01": {
+      "governing_document": "HI39520-PESDPITS999122-A8",
+      "area": ["topsides", "turret"],
+      "material": "90/10 copper-nickel",
+      "design_code": "ASME B31.3",
+      "pressure_rating_bar": 16.0,
+      "temperature_min_c": -29,
+      "temperature_max_c": 75,
+      "corrosion_allowance_mm": 0.5,
+      "service_codes": ["WF"],
+      "branch_chart": 3,
+      "cross_checks": [
+        "Pipe and fittings must match the size-dependent EEMUA/ASTM material definitions in the class sheet.",
+        "Flange, backing flange, gasket and bolting selections must be reconciled as a complete joint set.",
+        "Do not use this Topsides class on a Vessel line solely because the code is 01K01."
+      ]
+    }
+  },
+  "service_dictionary": {
+    "WF": "Firewater",
+    "WZ": "Fresh Water",
+    "DW": "Potable Water",
+    "WS": "Seawater",
+    "WP": "Produced Water",
+    "WB": "Ballast Water"
+  }
+}
