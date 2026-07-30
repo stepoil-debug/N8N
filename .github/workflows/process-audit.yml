@@ -11,6 +11,7 @@ on:
       - 'scripts/queue_worker.py'
       - 'scripts/process_queued_job.py'
       - 'scripts/execute_audit_cli.py'
+      - 'scripts/execute_audit_cli_v2.py'
       - 'scripts/build_cli_workflow.py'
       - 'workflows/40-auditoria-completa.json'
       - 'apps/document-api/**'
@@ -37,6 +38,9 @@ jobs:
       STEP_AUDIT_PAYLOAD_PATH: /tmp/step-audit-n8n-input.json
       STEP_AUDIT_WORKFLOW_OUTPUT: /tmp/audit-workflow.json
       STEP_AUDIT_WORKFLOW_ID: STEP_AUDIT_FULL_01
+      STEP_AUDIT_WORKFLOW_TIMEOUT_SECONDS: '2100'
+      STEP_AUDIT_HEARTBEAT_SECONDS: '60'
+      DOCUMENT_API_LOG: /tmp/document-api.log
       DOCUMENT_API_PUBLIC_URL: http://127.0.0.1:8000
       DOCUMENT_API_URL: http://127.0.0.1:8000
       DOCUMENT_API_KEY: step-audit-actions
@@ -56,6 +60,15 @@ jobs:
       N8N_LOG_LEVEL: warn
       LLM_BASE_URL: https://models.github.ai/inference/chat/completions
       LLM_MODEL: openai/gpt-4.1-mini
+      LLM_MAX_CHUNKS_PER_DOCUMENT: '2'
+      LLM_MAX_TOTAL_CHUNKS: '24'
+      LLM_MAX_PROPOSAL_DRAWINGS: '2'
+      LLM_MAX_AUDIT_BATCHES: '18'
+      LLM_AUDIT_CONCURRENCY: '2'
+      LLM_CHUNK_TIMEOUT_SECONDS: '90'
+      LLM_PROPOSAL_DRAWING_TIMEOUT_SECONDS: '180'
+      LLM_AUDIT_BATCH_TIMEOUT_SECONDS: '90'
+      LLM_PROPOSAL_TIMEOUT_SECONDS: '90'
       DRAWING_VISION_MODEL: openai/gpt-4.1-mini
       DRAWING_VISION_MAX_PAGES: '8'
       DRAWING_VISION_MAX_DETAIL_TILES: '1'
@@ -125,6 +138,8 @@ jobs:
         run: |
           python scripts/build_cli_workflow.py
           python -m json.tool "$STEP_AUDIT_WORKFLOW_OUTPUT" >/dev/null
+          grep -q 'extract-v2' "$STEP_AUDIT_WORKFLOW_OUTPUT"
+          grep -q 'audit-v2' "$STEP_AUDIT_WORKFLOW_OUTPUT"
           n8n import:workflow --input="$STEP_AUDIT_WORKFLOW_OUTPUT"
 
       - name: Start document API
@@ -133,7 +148,7 @@ jobs:
           LLM_API_KEY: ${{ github.token }}
           PYTHONPATH: apps/document-api
         run: |
-          python -m uvicorn app.cors_entrypoint:app --host 127.0.0.1 --port 8000 > /tmp/document-api.log 2>&1 &
+          python -m uvicorn app.cors_entrypoint:app --host 127.0.0.1 --port 8000 > "$DOCUMENT_API_LOG" 2>&1 &
           for attempt in $(seq 1 90); do
             if curl --fail --silent http://127.0.0.1:8000/health >/dev/null; then
               exit 0
@@ -141,7 +156,7 @@ jobs:
             sleep 2
           done
           echo 'Document API log:'
-          cat /tmp/document-api.log || true
+          cat "$DOCUMENT_API_LOG" || true
           exit 1
 
       - name: Execute queued analysis
@@ -149,6 +164,14 @@ jobs:
         env:
           LLM_API_KEY: ${{ github.token }}
         run: python scripts/process_queued_job.py
+
+      - name: Show engine diagnostics on failure
+        if: failure() && steps.claim.outputs.has_job == 'true'
+        run: |
+          echo '===== DOCUMENT API ====='
+          tail -n 400 "$DOCUMENT_API_LOG" || true
+          echo '===== N8N LOCAL DATA ====='
+          find ~/.n8n -maxdepth 2 -type f -printf '%p %s bytes\n' 2>/dev/null | tail -n 80 || true
 
       - name: Refresh OIDC token for publishing
         if: steps.claim.outputs.has_job == 'true' && success()
