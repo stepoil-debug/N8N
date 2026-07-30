@@ -9,6 +9,7 @@ on:
     paths:
       - '.github/workflows/process-audit.yml'
       - 'scripts/queue_worker.py'
+      - 'scripts/process_queued_job.py'
       - 'scripts/execute_audit_cli.py'
       - 'scripts/build_cli_workflow.py'
       - 'workflows/40-auditoria-completa.json'
@@ -64,6 +65,10 @@ jobs:
       DRAWING_VISION_MAX_RETRIES: '3'
       DRAWING_VISION_MAX_TOKENS: '2600'
       DRAWING_KNOWLEDGE_PATH: knowledge/offshore_drawing_rules.json
+      CLIENT_KNOWLEDGE_ROOT: knowledge/clients
+      DRAWING_AUDIT_MAX_FILES: '24'
+      DRAWING_AUDIT_MAX_CONDITION_FILES: '10'
+      DRAWING_AUDIT_MAX_CONDITION_CHUNKS: '10'
 
     steps:
       - name: Checkout repository
@@ -139,11 +144,11 @@ jobs:
           cat /tmp/document-api.log || true
           exit 1
 
-      - name: Execute complete proposal audit through n8n CLI
+      - name: Execute queued analysis
         if: steps.claim.outputs.has_job == 'true'
         env:
           LLM_API_KEY: ${{ github.token }}
-        run: python scripts/execute_audit_cli.py
+        run: python scripts/process_queued_job.py
 
       - name: Refresh OIDC token for publishing
         if: steps.claim.outputs.has_job == 'true' && success()
@@ -154,7 +159,7 @@ jobs:
             core.setSecret(token);
             core.exportVariable('WORKER_OIDC_TOKEN', token);
 
-      - name: Publish reports and corrected proposal
+      - name: Publish generated artifacts
         if: steps.claim.outputs.has_job == 'true' && success()
         run: python scripts/queue_worker.py publish
 
