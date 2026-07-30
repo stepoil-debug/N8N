@@ -90,6 +90,9 @@ def download() -> int:
 def process() -> int:
     payload = json.loads(JOB_FILE.read_text(encoding="utf-8"))
     job = payload["job"]
+    agents = job.get("agents") if isinstance(job.get("agents"), list) else []
+    drawing_mode = "drawing" in agents
+    endpoint = "/v1/drawings/from-package" if drawing_mode else "/v1/audits/from-package"
     with INPUT_FILE.open("rb") as handle:
         files = {"file": (job.get("package_name") or "opportunity.zip", handle, "application/zip")}
         form = {
@@ -97,10 +100,10 @@ def process() -> int:
             "client": job.get("client") or "",
             "rfq_id": job.get("rfq_id") or "",
             "owner": job.get("owner_name") or "",
-            "agents_json": json.dumps(job.get("agents") or []),
+            "agents_json": json.dumps(agents),
         }
-        with httpx.Client(timeout=httpx.Timeout(1500.0, connect=30.0)) as client:
-            response = client.post(f"{API_URL}/v1/audits/from-package", headers={"x-step-api-key": API_KEY}, data=form, files=files)
+        with httpx.Client(timeout=httpx.Timeout(3000.0 if drawing_mode else 1500.0, connect=30.0)) as client:
+            response = client.post(f"{API_URL}{endpoint}", headers={"x-step-api-key": API_KEY}, data=form, files=files)
     try:
         body = response.json()
     except ValueError:
@@ -111,9 +114,10 @@ def process() -> int:
             detail = detail.get("message") or json.dumps(detail, ensure_ascii=False)
         fail(str(detail or body.get("message") or f"API respondeu HTTP {response.status_code}"))
     if body.get("status") != "analysis_completed":
-        fail(str(body.get("message") or "A auditoria não retornou analysis_completed"))
+        fail(str(body.get("message") or "A análise não retornou analysis_completed"))
     RESULT_FILE.write_text(json.dumps(body, ensure_ascii=False, indent=2), encoding="utf-8")
-    print(f"Auditoria concluída com {len(body.get('findings') or [])} achado(s).")
+    label = "Análise de desenhos" if drawing_mode else "Auditoria"
+    print(f"{label} concluída com {len(body.get('findings') or [])} achado(s).")
     return 0
 
 
