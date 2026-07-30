@@ -1,5 +1,5 @@
 {
-  "version": "1.0.0",
+  "version": "1.1.0",
   "purpose": "Knowledge base for adversarial review of offshore, oil and gas, fabrication, structural and piping drawings. It supports evidence extraction and inconsistency detection; it does not replace a qualified engineer or licensed standards.",
   "governance": {
     "default_decision": "not_verifiable",
@@ -21,7 +21,51 @@
       "Never infer a missing bolt solely from an open circular feature; confirm assembly intent, BOM, callout, flange pattern or another view.",
       "A blocking finding requires at least two independent evidence channels or one explicit drawing contradiction.",
       "Distinguish design omission, drafting omission, fabrication omission and unavailable evidence.",
-      "Use not_verifiable when scale, resolution, revision, referenced detail or standard is unavailable."
+      "Use not_verifiable when scale, resolution, revision, referenced detail or standard is unavailable.",
+      "For STEP spool counting, use actual flange connections as boundaries. A spool is one continuous fabricated piping segment from one flange connection to the next flange connection.",
+      "Do not split a spool at shop welds, field welds, bends, tees, reducers, supports, sheet changes or CONT'D ON marks unless the interface is explicitly flange-connected.",
+      "A flanged valve or equipment item is not itself a spool, but its mating flange connections delimit the adjacent spool segments.",
+      "For branches, count each unique flange-to-flange path without counting a shared physical segment twice."
+    ]
+  },
+  "spool_counting_convention": {
+    "owner": "STEP",
+    "definition": "One spool is a continuous fabricated piping segment bounded by a flange connection at each end.",
+    "graph_model": "Treat each confirmed flange connection as a node and each unique continuous fabricated path between two flange nodes as one spool edge.",
+    "boundaries": [
+      "flanged pipe end",
+      "mating flange at a flanged valve",
+      "mating flange at equipment or nozzle",
+      "flanged branch termination",
+      "explicitly shown flange at a drawing continuation"
+    ],
+    "not_boundaries_by_themselves": [
+      "shop weld",
+      "field weld",
+      "socket weld",
+      "screwed joint",
+      "elbow",
+      "tee",
+      "reducer",
+      "support",
+      "spool label text without matching flange boundaries",
+      "CONT'D ON or change of sheet without a flange"
+    ],
+    "component_treatment": [
+      "A purchased flanged valve or equipment item is excluded from spool quantity but creates flange boundaries for adjacent spools.",
+      "Fittings and welded branches inside the two flange boundaries belong to the same spool.",
+      "A branch ending at its own flange defines a separate flange-to-flange path; do not duplicate the common physical section when reporting fabricated spool quantity.",
+      "When one flange boundary is hidden, cropped or referenced on another drawing, classify the count as not_verifiable until the continuation is available."
+    ],
+    "required_output": [
+      "spool_count",
+      "spool_id_or_generated_id",
+      "start_flange_evidence",
+      "end_flange_evidence",
+      "included_components",
+      "drawing_page_and_region",
+      "confidence",
+      "counting_warnings"
     ]
   },
   "drawing_families": [
@@ -48,7 +92,7 @@
     {
       "id": "piping_isometric",
       "names": ["isometric", "isométrico", "ISO", "spool drawing"],
-      "expected_content": ["line number", "specification", "size", "rating", "flow direction", "weld numbers", "supports", "flanges", "valves", "MTO", "test and insulation notes"]
+      "expected_content": ["line number", "specification", "size", "rating", "flow direction", "weld numbers", "supports", "flanges", "valves", "MTO", "spool boundaries", "flange-to-flange spool count", "test and insulation notes"]
     },
     {
       "id": "piping_support",
@@ -118,7 +162,9 @@
     {"id": "P04", "name": "support_or_restraint_missing", "question": "Does the isometric/reference require a support, guide, anchor or shoe that is absent from the support list or detail?", "always_human_review": true},
     {"id": "P05", "name": "flange_joint_set_incomplete", "question": "Is a flanged joint missing flange mate, gasket, bolting or rating/facing compatibility evidence?"},
     {"id": "P06", "name": "branch_connection_undefined", "question": "Is branch type, reinforcement or fitting definition incomplete or contradictory?", "always_human_review": true},
-    {"id": "P07", "name": "test_boundary_or_vent_drain_gap", "question": "Are test limits, vents, drains, blinds or temporary items inconsistent with the stated test scope?"}
+    {"id": "P07", "name": "test_boundary_or_vent_drain_gap", "question": "Are test limits, vents, drains, blinds or temporary items inconsistent with the stated test scope?"},
+    {"id": "P08", "name": "flange_to_flange_spool_count", "question": "Using the STEP convention, does the counted spool quantity equal the number of unique continuous fabricated flange-to-flange paths shown in the isometric?", "counting_rule": "One confirmed flange connection to the next confirmed flange connection equals one spool; non-flanged welds, fittings, supports and sheet changes do not split it."},
+    {"id": "P09", "name": "spool_label_boundary_conflict", "question": "Do spool labels, SPL identifiers or stated quantities conflict with the actual flange-to-flange boundaries?", "blocking_evidence": ["both flange boundaries visible or traceable", "spool identifier or quantity readable", "explicit mismatch"]}
   ],
   "drawing_integrity_checks": [
     {"id": "D01", "name": "revision_conflict", "question": "Do title block revision, revision cloud, revision table and proposal reference disagree?"},
@@ -146,6 +192,8 @@
     "bolted_connections": "array",
     "holes_and_patterns": "array",
     "bom_items": "array",
+    "spools": "array with spool_id, start_flange, end_flange, included_components, page, region, confidence and warnings",
+    "spool_count": "integer or null when boundaries are not fully verifiable",
     "issues": "array with rule_id, title, evidence, contradiction, correction, confidence, severity, blocking, requires_human_review",
     "needs_detail_tiles": "array of top_left, top_right, bottom_left, bottom_right",
     "confidence": "0..1"
