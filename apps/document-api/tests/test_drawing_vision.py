@@ -26,11 +26,16 @@ def sample_drawing() -> bytes:
     return buffer.getvalue()
 
 
-def test_knowledge_has_weld_and_bolting_rules():
+def test_knowledge_has_weld_bolting_and_spool_rules():
     knowledge = load_knowledge()
     assert any(item["id"] == "W01" for item in knowledge["weld_checks"])
     assert any(item["id"] == "B02" for item in knowledge["bolting_checks"])
+    assert any(item["id"] == "P08" for item in knowledge["piping_checks"])
     assert knowledge["governance"]["default_decision"] == "not_verifiable"
+    convention = knowledge["spool_counting_convention"]
+    assert "flange connection at each end" in convention["definition"]
+    assert "field weld" in convention["not_boundaries_by_themselves"]
+    assert "spools" in knowledge["vision_output_schema"]
 
 
 def test_prepare_visual_assets_from_image():
