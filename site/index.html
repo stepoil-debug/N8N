@@ -4,13 +4,14 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <meta name="theme-color" content="#0b2447">
-  <meta name="description" content="Auditoria industrial STEP: comparação automática de RFQ e proposta com geração de proposta revisada.">
+  <meta name="description" content="Auditoria industrial STEP: comparação automática de RFQ e proposta e análise técnica de desenhos por cliente.">
   <title>STEP Audit One</title>
   <link rel="icon" href="favicon.svg" type="image/svg+xml">
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="stylesheet" href="styles.css">
   <link rel="stylesheet" href="zip.css">
   <link rel="stylesheet" href="results.css">
+  <link rel="stylesheet" href="drawings.css">
 </head>
 <body>
   <div class="app-shell">
@@ -19,6 +20,7 @@
       <nav class="nav" aria-label="Navegação principal">
         <button class="nav-item active" data-view="dashboard"><span>⌂</span> Visão geral</button>
         <button class="nav-item" data-view="new-audit"><span>＋</span> Nova auditoria</button>
+        <button class="nav-item" data-view="drawing-analysis"><span>⌗</span> Análise de desenhos</button>
         <button class="nav-item" data-view="results"><span>✓</span> Resultado</button>
         <button class="nav-item" data-view="history"><span>◷</span> Histórico</button>
         <button class="nav-item" data-view="architecture"><span>⌘</span> Arquitetura</button>
@@ -39,16 +41,16 @@
       <section class="view active" id="view-dashboard">
         <div class="hero">
           <div>
-            <span class="pill">Auditoria completa de propostas</span>
-            <h2>Compare os documentos do cliente com a proposta STEP e gere uma versão revisada.</h2>
-            <p>O agente extrai requisitos, compromissos, inconsistências, riscos e correções. Ao final, entrega relatório, planilha e proposta corrigida em DOCX e PDF.</p>
-            <div class="hero-actions"><button class="button primary" data-go="new-audit">Executar auditoria</button><button class="button ghost" data-go="architecture">Ver arquitetura</button></div>
+            <span class="pill">Auditoria completa de propostas e desenhos</span>
+            <h2>Compare documentos do cliente com a proposta STEP ou execute uma revisão técnica exclusiva dos desenhos.</h2>
+            <p>O agente extrai requisitos, compromissos, inconsistências, riscos e correções. Na análise visual, aplica somente as condicionais do cliente e projeto selecionados.</p>
+            <div class="hero-actions"><button class="button primary" data-go="new-audit">Auditar proposta</button><button class="button ghost" data-go="drawing-analysis">Analisar desenhos</button></div>
           </div>
-          <div class="hero-orbit" aria-hidden="true"><div class="orbit-core">AI</div><span class="orbit-node n1">RFQ</span><span class="orbit-node n2">STEP</span><span class="orbit-node n3">RISCOS</span><span class="orbit-node n4">DOCX</span></div>
+          <div class="hero-orbit" aria-hidden="true"><div class="orbit-core">AI</div><span class="orbit-node n1">RFQ</span><span class="orbit-node n2">STEP</span><span class="orbit-node n3">DWG</span><span class="orbit-node n4">DOCX</span></div>
         </div>
         <div class="metrics-grid">
           <article class="metric"><span>Auditorias</span><strong id="metricAudits">0</strong><small>Execuções registradas neste navegador</small></article>
-          <article class="metric"><span>Documentos analisados</span><strong id="metricDocuments">0</strong><small>Cliente + STEP</small></article>
+          <article class="metric"><span>Documentos analisados</span><strong id="metricDocuments">0</strong><small>Propostas + desenhos</small></article>
           <article class="metric"><span>Bloqueios identificados</span><strong id="metricBlocks">0</strong><small>Riscos críticos</small></article>
           <article class="metric"><span>Fila de auditoria</span><strong id="metricPlatform">Verificando</strong><small>GitHub Actions sob demanda</small></article>
         </div>
@@ -56,14 +58,14 @@
           <article class="panel">
             <div class="panel-head"><div><p class="eyebrow">Pipeline</p><h3>Fluxo completo</h3></div><span class="badge">8 etapas</span></div>
             <ol class="pipeline">
-              <li><span>1</span><div><strong>Receber o ZIP</strong><small>Pacote completo da oportunidade.</small></div></li>
+              <li><span>1</span><div><strong>Receber o ZIP</strong><small>Pacote da oportunidade ou desenhos.</small></div></li>
               <li><span>2</span><div><strong>Extrair documentos</strong><small>PDF, Word, Excel, MSG/EML e OCR.</small></div></li>
-              <li><span>3</span><div><strong>Separar fontes</strong><small>Cliente, STEP e itens não classificados.</small></div></li>
-              <li><span>4</span><div><strong>Extrair requisitos e compromissos</strong><small>Escopo, prazo, preço, normas e condições.</small></div></li>
-              <li><span>5</span><div><strong>Comparar aderência</strong><small>Atendido, parcial, não atendido ou não verificável.</small></div></li>
-              <li><span>6</span><div><strong>Apontar correções</strong><small>Texto recomendado e impacto de cada inconsistência.</small></div></li>
-              <li><span>7</span><div><strong>Reescrever a proposta</strong><small>Modelo revisado com ressalvas e validações humanas.</small></div></li>
-              <li><span>8</span><div><strong>Entregar artefatos</strong><small>PDF, DOCX, XLSX e JSON.</small></div></li>
+              <li><span>3</span><div><strong>Identificar cliente e contexto</strong><small>Cliente, projeto, Vessel/Topsides, classe e serviço.</small></div></li>
+              <li><span>4</span><div><strong>Aplicar condicionais isoladas</strong><small>Nenhuma regra é transferida para outro cliente.</small></div></li>
+              <li><span>5</span><div><strong>Comparar ou revisar</strong><small>Proposta × RFQ ou desenho × condicionais.</small></div></li>
+              <li><span>6</span><div><strong>Apontar correções</strong><small>Texto ou alteração técnica recomendada.</small></div></li>
+              <li><span>7</span><div><strong>Validar cobertura</strong><small>Confirmado, candidato ou não verificável.</small></div></li>
+              <li><span>8</span><div><strong>Entregar artefatos</strong><small>PDF, XLSX, JSON e DOCX quando aplicável.</small></div></li>
             </ol>
           </article>
           <article class="panel"><div class="panel-head"><div><p class="eyebrow">Atividade</p><h3>Últimas auditorias</h3></div><button class="text-button" data-go="history">Ver todas</button></div><div id="recentAudits" class="empty-state"><div class="empty-icon">◎</div><strong>Nenhuma auditoria concluída</strong><p>Envie um ZIP para começar.</p></div></article>
@@ -104,6 +106,62 @@
         </form>
       </section>
 
+      <section class="view" id="view-drawing-analysis">
+        <div class="section-intro"><div><p class="eyebrow">Engenharia e fabricação</p><h2>Análise técnica de desenhos</h2><p>Envie desenhos em PDF/imagem e, opcionalmente, as condicionais do cliente. A regra aplicada ficará limitada ao cliente e projeto desta execução.</p></div><span class="secure-note">🔒 PDFs e condicionais permanecem no armazenamento privado temporário</span></div>
+        <form id="drawingAuditForm" class="drawing-layout">
+          <article class="panel form-panel">
+            <div class="step-title"><span>1</span><div><h3>ZIP de desenhos</h3><p>O ZIP pode conter apenas os PDFs ou também uma pasta com condicionais do cliente.</p></div></div>
+            <div class="drawing-mode-grid">
+              <div class="drawing-mode-card"><strong>Somente desenhos</strong><small>Todos os PDFs e imagens serão tratados como desenhos. O perfil do cliente poderá ser reconhecido automaticamente.</small></div>
+              <div class="drawing-mode-card"><strong>Desenhos + condicionais</strong><small>Use nomes ou pasta como “Condicionais”, “Specifications”, “Normas” ou “Requirements”.</small></div>
+              <div class="drawing-mode-card"><strong>Perfil cadastrado</strong><small>Selecione uma base permanente já validada para o cliente/projeto. Ela nunca será usada em outro cliente.</small></div>
+            </div>
+            <label class="dropzone zip-dropzone" id="drawingDropzone"><input type="file" id="drawingPackageFile" accept=".zip,application/zip"><span class="drop-icon">⌗</span><strong>Arraste o ZIP de desenhos ou clique para selecionar</strong><small>PDF, PNG, JPG, WEBP e documentos de condicionais · até 250 MB</small></label>
+            <div class="file-list" id="drawingFileList"></div>
+          </article>
+
+          <article class="panel form-panel" id="drawingInventoryPanel" hidden>
+            <div class="step-title"><span>2</span><div><h3>Separação desenhos × condicionais</h3><p>Esta é uma prévia local; o servidor também lê o conteúdo das páginas para confirmar a função de cada arquivo.</p></div></div>
+            <div class="zip-summary" id="drawingZipSummary"></div>
+            <div class="inventory-scroll" id="drawingInventoryTable"></div>
+          </article>
+
+          <article class="panel form-panel">
+            <div class="step-title"><span>3</span><div><h3>Cliente e contexto</h3><p>Esses dados determinam quais condicionais podem ser aplicadas.</p></div></div>
+            <div class="form-grid">
+              <label><span>Referência da análise *</span><input id="drawingReference" required placeholder="Ex.: HI39520-WZ-REVISAO-001"></label>
+              <label><span>Cliente *</span><input id="drawingClientName" required placeholder="Ex.: SBM Offshore / Petrobras"></label>
+              <label><span>Projeto / unidade</span><input id="drawingProject" placeholder="Ex.: FPSO Cidade de Ilhabela — HI39520"></label>
+              <label><span>Responsável STEP</span><input id="drawingOwner" placeholder="Nome do responsável"></label>
+              <label><span>Área do desenho</span><select id="drawingArea"><option value="">Detectar no desenho</option><option value="vessel">Vessel / Marine</option><option value="topsides">Topsides / Turret</option></select></label>
+              <label><span>Perfil permanente do cliente</span><select id="drawingClientProfile"><option value="auto">Detectar automaticamente</option><option value="sbm-hi39520-cidade-de-ilhabela">SBM / Petrobras — Cidade de Ilhabela (HI39520)</option><option value="none">Não usar perfil permanente</option></select></label>
+            </div>
+          </article>
+
+          <article class="panel form-panel">
+            <div class="step-title"><span>4</span><div><h3>Isolamento das condicionais</h3><p>A base é resolvida em Cliente → Projeto → Área → Classe → Componente → Nota.</p></div></div>
+            <div class="drawing-policy">
+              <div class="notice warning"><strong>Regra obrigatória:</strong> uma condicional de SBM, PERENCO, Yinson ou qualquer outro cliente não será reaproveitada em outro cliente. Condicionais enviadas no ZIP valem somente para esta execução.</div>
+              <div class="drawing-profile-status" id="drawingProfileStatus"></div>
+            </div>
+          </article>
+
+          <div class="submit-bar"><div><strong id="drawingFileCounter">Nenhum ZIP selecionado</strong><small>A leitura visual pode levar mais tempo conforme a quantidade de páginas.</small></div><button type="button" class="button secondary" id="saveDrawingDraft">Salvar rascunho</button><button type="submit" class="button primary large" id="runDrawingAudit">Executar análise de desenhos</button></div>
+        </form>
+
+        <article class="panel drawing-result-panel" id="drawingRunPanel" hidden>
+          <div class="drawing-run-head"><div><p class="eyebrow">Execução</p><h3 id="drawingRunTitle">Na fila</h3><p id="drawingRunDetail"></p></div><strong id="drawingProgressValue">0%</strong></div>
+          <div><div class="drawing-progress-track"><div class="drawing-progress-bar" id="drawingProgressBar"></div></div><div class="drawing-progress-labels"><span>Upload</span><span>Fila</span><span>Leitura</span><span>Condicionais</span><span>Validação</span><span>Arquivos</span></div></div>
+        </article>
+
+        <div class="drawing-result-panel" id="drawingCompletedResult" hidden>
+          <div class="drawing-result-metrics" id="drawingResultMetrics"></div>
+          <article class="panel"><div class="panel-head"><div><p class="eyebrow">Parecer</p><h3>Resultado da análise técnica</h3></div></div><p id="drawingResultOpinion"></p></article>
+          <article class="panel"><div class="panel-head"><div><p class="eyebrow">Entregáveis</p><h3>Relatório, planilha e JSON</h3></div></div><div class="drawing-artifacts" id="drawingArtifactGrid"></div></article>
+          <article class="panel"><div class="panel-head"><div><p class="eyebrow">Achados</p><h3>Erros e inconsistências priorizados</h3></div></div><div class="inventory-scroll" id="drawingFindingsTable"></div></article>
+        </div>
+      </section>
+
       <section class="view" id="view-results">
         <div id="resultEmpty" class="panel empty-state"><div class="empty-icon">✓</div><strong>Nenhum resultado carregado</strong><p>Conclua uma auditoria ou abra uma execução pelo histórico.</p></div>
         <div id="resultContent" hidden>
@@ -124,9 +182,9 @@
       <section class="view" id="view-history"><div class="section-intro"><div><p class="eyebrow">Rastreabilidade</p><h2>Histórico local</h2><p>Somente metadados e resultados resumidos são mantidos neste navegador.</p></div><button class="button ghost" id="clearHistory">Limpar histórico</button></div><div class="panel"><div id="historyTable" class="empty-state"><div class="empty-icon">◷</div><strong>Histórico vazio</strong><p>As oportunidades executadas aparecerão aqui.</p></div></div></section>
 
       <section class="view" id="view-architecture">
-        <div class="section-intro"><div><p class="eyebrow">Arquitetura</p><h2>Como a auditoria funciona</h2><p>O GitHub Pages recebe o pacote, o Supabase mantém a fila privada e o GitHub Actions executa o n8n com GitHub Models sob demanda.</p></div></div>
-        <div class="architecture-flow"><article><span>01</span><strong>ZIP único</strong><small>Upload temporário e privado.</small></article><i>→</i><article><span>02</span><strong>Fila Supabase</strong><small>Status e rastreabilidade.</small></article><i>→</i><article><span>03</span><strong>GitHub Actions + n8n</strong><small>Extração e orquestração sob demanda.</small></article><i>→</i><article><span>04</span><strong>GitHub Models</strong><small>Requisitos, inconsistências e correções.</small></article><i>→</i><article><span>05</span><strong>Proposta revisada</strong><small>DOCX, PDF, XLSX e JSON.</small></article></div>
-        <div class="notice warning"><strong>Regra de segurança:</strong> preço, prazo ou obrigação sem evidência suficiente são marcados para validação humana, nunca alterados silenciosamente. O processamento é assíncrono e pode levar alguns minutos.</div>
+        <div class="section-intro"><div><p class="eyebrow">Arquitetura</p><h2>Como a auditoria funciona</h2><p>O GitHub Pages recebe o pacote, o Supabase mantém a fila privada e o GitHub Actions executa o n8n ou o motor visual especializado com GitHub Models.</p></div></div>
+        <div class="architecture-flow"><article><span>01</span><strong>ZIP único</strong><small>Upload temporário e privado.</small></article><i>→</i><article><span>02</span><strong>Fila Supabase</strong><small>Tipo da análise e rastreabilidade.</small></article><i>→</i><article><span>03</span><strong>Roteamento</strong><small>Proposta via n8n ou desenho via visão.</small></article><i>→</i><article><span>04</span><strong>Conhecimento por cliente</strong><small>Perfil isolado + condicionais temporárias.</small></article><i>→</i><article><span>05</span><strong>Entregáveis</strong><small>PDF, XLSX, JSON e DOCX quando aplicável.</small></article></div>
+        <div class="notice warning"><strong>Regra de segurança:</strong> preço, prazo, obrigação ou erro técnico sem evidência suficiente são marcados para validação humana. Condicionais não são compartilhadas entre clientes.</div>
       </section>
     </main>
   </div>
@@ -135,5 +193,6 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
   <script src="app.js" defer></script>
+  <script src="drawings.js" defer></script>
 </body>
 </html>
