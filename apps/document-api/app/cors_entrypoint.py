@@ -157,8 +157,21 @@ async def finalize_audit(request: Request) -> dict:
     if not isinstance(analysis.get("findings"), list):
         raise HTTPException(status_code=422, detail="analysis.findings deve ser uma lista")
 
+    # Os artefatos padrão são gerados primeiro. Uma incompatibilidade de estilo no
+    # DOCX original nunca pode descartar PDF, XLSX, JSON ou a proposta gerada.
     result = generate_artifacts(opportunity, package, analysis)
-    original_based = revise_original_proposal(opportunity, analysis)
+    try:
+        original_based = revise_original_proposal(opportunity, analysis)
+    except Exception as exc:  # noqa: BLE001
+        result["proposal_source"] = "generated_model"
+        result.setdefault("warnings", []).append(
+            {
+                "topic": "Revisão do DOCX original",
+                "reason": f"O modelo Word original não pôde ser regravado; foi mantida a proposta revisada gerada pelo sistema: {type(exc).__name__}: {exc}",
+            }
+        )
+        return result
+
     if original_based is not None:
         replacement = artifact(str(opportunity["opportunity_id"]), original_based)
         for index, item in enumerate(result.get("artifacts") or []):
