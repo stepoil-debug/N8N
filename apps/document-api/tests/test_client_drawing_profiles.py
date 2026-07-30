@@ -77,6 +77,20 @@ def test_sbm_profile_is_detected_only_with_matching_evidence() -> None:
     assert "topsides:01K01" in context["pmc_profiles"]
 
 
+def test_server_accepts_matching_project_profile() -> None:
+    drawing = pdf_entry("HI39520-WZ-V21610.pdf", "SBM FPSO CIDADE DE ILHABELA PIPING ISOMETRIC")
+    context = guarded_client_context(
+        {"client": "SBM Offshore / Petrobras", "project": "FPSO Cidade de Ilhabela — HI39520"},
+        {"package_name": "HI39520-DRAWINGS.zip"},
+        [drawing],
+        [],
+        [],
+        "sbm-hi39520-cidade-de-ilhabela",
+    )
+    assert context["matched"] is True
+    assert context["profile_id"] == "sbm-hi39520-cidade-de-ilhabela"
+
+
 def test_server_rejects_profile_from_another_client() -> None:
     drawing = pdf_entry("PERENCO-WP-PCH2-2025-007.pdf", "PERENCO PIPING ISOMETRIC")
     with pytest.raises(HTTPException) as exc:
@@ -90,3 +104,17 @@ def test_server_rejects_profile_from_another_client() -> None:
         )
     assert exc.value.status_code == 422
     assert "não será aplicada" in str(exc.value.detail)
+
+
+def test_server_rejects_same_operator_but_different_project() -> None:
+    drawing = pdf_entry("PETROBRAS-OTHER-FPSO.pdf", "PETROBRAS PIPING ISOMETRIC OTHER FPSO")
+    with pytest.raises(HTTPException) as exc:
+        guarded_client_context(
+            {"client": "Petrobras", "project": "Outro FPSO"},
+            {"package_name": "PETROBRAS-OUTRO-FPSO.zip"},
+            [drawing],
+            [],
+            [],
+            "sbm-hi39520-cidade-de-ilhabela",
+        )
+    assert exc.value.status_code == 422
