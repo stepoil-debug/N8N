@@ -24,8 +24,8 @@ def main() -> int:
         command = [sys.executable, "scripts/queue_worker.py", "process"]
         label = "análise de desenhos"
     else:
-        command = [sys.executable, "scripts/execute_audit_cli.py"]
-        label = "auditoria de proposta"
+        command = [sys.executable, "scripts/execute_audit_cli_v2.py"]
+        label = "auditoria de proposta com lotes limitados"
     print(f"Roteando trabalho {job.get('id')} para {label}.", flush=True)
     completed = subprocess.run(command, check=False)
     return int(completed.returncode)
