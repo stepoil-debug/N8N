@@ -38,9 +38,11 @@ jobs:
           test -f site/styles.css
           test -f site/zip.css
           test -f site/results.css
+          test -f site/drawings.css
           test -f site/config.js
           test -f site/app.js
           test -f site/progress.js
+          test -f site/drawings.js
           grep -q "queueBaseUrl" site/config.js
           grep -q "step-audit-queue" site/config.js
           grep -q "uploadToSignedUrl" site/app.js
@@ -48,6 +50,9 @@ jobs:
           grep -q "requestQueue('submit'" site/app.js
           grep -q "audit-progress" site/progress.js
           grep -q "progressFor" site/progress.js
+          grep -q "view-drawing-analysis" site/index.html
+          grep -q "client-profile:" site/drawings.js
+          grep -q "analysisType: 'drawing'" site/drawings.js
           if grep -q "app-parts/" site/app.js; then
             echo "O frontend ainda depende de blocos fragmentados."
             exit 1
@@ -55,11 +60,12 @@ jobs:
           node --check site/config.js
           node --check site/app.js
           node --check site/progress.js
+          node --check site/drawings.js
 
       - name: Prepare versioned Pages artifact
         shell: bash
         env:
-          VERSION: 1.5.${{ github.run_number }}
+          VERSION: 1.6.${{ github.run_number }}
           ASSET_VERSION: ${{ github.sha }}
         run: |
           set -euo pipefail
@@ -83,7 +89,7 @@ jobs:
                   '<script src="app.js" defer></script>',
                   '<script src="app.js" defer></script>\n  <script src="progress.js" defer></script>',
               )
-          for filename in ('styles.css', 'zip.css', 'results.css', 'config.js', 'app.js', 'progress.js'):
+          for filename in ('styles.css', 'zip.css', 'results.css', 'drawings.css', 'config.js', 'app.js', 'progress.js', 'drawings.js'):
               text = re.sub(
                   rf'{re.escape(filename)}(?:\?v=[^"\']+)?',
                   f'{filename}?v={asset}',
@@ -107,8 +113,10 @@ jobs:
               'commit': asset,
               'frontend_mode': 'direct_asynchronous_queue',
               'progress_mode': 'status_and_pipeline_stage',
+              'drawing_mode': 'client_isolated_visual_audit',
+              'client_conditionals': 'per_client_and_per_execution',
               'queue': 'supabase_private',
-              'orchestrator': 'n8n_cli_github_actions',
+              'orchestrator': 'n8n_and_specialized_drawing_worker',
               'model_provider': 'github_models',
           }
           (root / 'build.json').write_text(json.dumps(build, ensure_ascii=False, indent=2), encoding='utf-8')
@@ -118,10 +126,12 @@ jobs:
 
           node --check /tmp/step-audit-pages/app.js
           node --check /tmp/step-audit-pages/progress.js
-          grep -q "STEP Audit One · v1.5." /tmp/step-audit-pages/index.html
+          node --check /tmp/step-audit-pages/drawings.js
+          grep -q "STEP Audit One · v1.6." /tmp/step-audit-pages/index.html
           grep -q "app.js?v=${GITHUB_SHA}" /tmp/step-audit-pages/index.html
           grep -q "progress.js?v=${GITHUB_SHA}" /tmp/step-audit-pages/index.html
-          grep -q '"progress_mode": "status_and_pipeline_stage"' /tmp/step-audit-pages/build.json
+          grep -q "drawings.js?v=${GITHUB_SHA}" /tmp/step-audit-pages/index.html
+          grep -q '"drawing_mode": "client_isolated_visual_audit"' /tmp/step-audit-pages/build.json
 
       - name: Upload site artifact
         uses: actions/upload-pages-artifact@v4
